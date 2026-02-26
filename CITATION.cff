@@ -21,10 +21,9 @@ authors:
   - family-names: Boada
     given-names: Yadira
     affiliation: Universitat Politècnica de València
-repository-code: "https://github.com/sb2cl/SynTwin"
-doi: 10.5281/zenodo.18787107
+url: "https://github.com/sb2cl/SynTwin"
 license: MIT
-version: 1.0.0
+version: 1.0.1
 date-released: 2026-02-26
 abstract: >
   SynTwin is a host-aware digital twin framework for quantitative
