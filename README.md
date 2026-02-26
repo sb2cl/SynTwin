@@ -1,5 +1,8 @@
 # SynTwin — Host-aware Digital Twin for Biopart Characterization
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18787107.svg)](https://doi.org/10.5281/zenodo.18787107)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+
 > **Release note (pre-publication / peer-review stage).**  
 > This repository corresponds to the SynTwin implementation used to generate the computational results reported in the associated manuscript and Supplementary Information currently submitted for review at *Nature Communications*.  
 > Some additional capabilities under active development may be intentionally excluded from this release.
@@ -130,18 +133,25 @@ If you use SynTwin in academic work, please cite:
 **SynTwin software (this repository).**  
 Citation metadata is provided in the `CITATION.cff` file.
 
-A DOI for this software release will be added once the Zenodo record is created.
+Software DOI: https://doi.org/10.5281/zenodo.18787107
+Current archived version: v1.0.1 (Zenodo record).
+This DOI represents all versions of the SynTwin software and always resolves to the latest archived release.
 
 **Associated manuscript:**  
 Picó, J.; Arboleda-García, A.; Penas, D.R.; Banga, J.R.; Vignoni, A.; Boada, Y. (2026).  
 *Host-aware Identification of Intrinsic Gene Expression Biopart Parameters using Combinatorial Libraries.*  
-Nature Communications (submitted).  
-DOI: to be added upon publication.
+Nature Communications (submitted). 
 
 ## License and terms of use (SynTwin code)
 
 **SynTwin code (this repository):**  
 See `LICENSE.md` at the repository root.
+
+## Documentation
+
+The SynTwin User Manual is available here:
+
+[SynTwin User Manual (PDF)](doc/SynTwin_User_Manual.pdf)
 
 
 ## Contact
