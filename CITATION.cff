@@ -1,0 +1,40 @@
+cff-version: 1.2.0
+title: "SynTwin: Host-aware Digital Twin for Biopart Characterization"
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - family-names: Picó
+    given-names: Jesús
+    affiliation: Universitat Politècnica de València
+  - family-names: [Arboleda-García]
+    given-names: [Andrés]
+    affiliation: [Universitat Politècnica de València]
+  - family-names: Penas
+    given-names: David R.
+    affiliation: MBG-CSIC
+  - family-names: Banga
+    given-names: Julio R.
+    affiliation: MBG-CSIC
+  - family-names: Vignoni
+    given-names: Alejandro
+    affiliation: Universitat Politècnica de València
+  - family-names: Boada
+    given-names: Yadira
+    affiliation: Universitat Politècnica de València
+repository-code: "https://github.com/sb2cl/SynTwin"
+license: MIT
+version: 1.0.0
+date-released: 2026-02-26
+abstract: >
+  SynTwin is a host-aware digital twin framework for quantitative
+  identification of intrinsic gene expression biopart parameters
+  using combinatorial libraries under growth-dependent resource constraints.
+keywords:
+  - synthetic biology
+  - digital twin
+  - gene expression
+  - host-aware modeling
+  - parameter estimation
+
+
+ 
