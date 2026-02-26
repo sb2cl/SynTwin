@@ -1,7 +1,7 @@
 # SynTwin — Host-aware Digital Twin for Biopart Characterization
 
 > **Release note (pre-publication / peer-review stage).**  
-> This repository corresponds to the SynTwin implementation used to generate the computational results reported in the associated manuscript and Supplementary Information currently under review at *Nature Communications*.  
+> This repository corresponds to the SynTwin implementation used to generate the computational results reported in the associated manuscript and Supplementary Information currently submitted for review at *Nature Communications*.  
 > Some additional capabilities under active development may be intentionally excluded from this release.
 
 ---
@@ -125,21 +125,25 @@ These packages retain their original authorship and licenses. Users are responsi
 
 ## Citation
 
-If you use SynTwin in academic work, please cite the associated manuscript:
+If you use SynTwin in academic work, please cite:
 
-> **[Authors]** (2026). *Host-aware Identification of Intrinsic Gene Expression Biopart Parameters using Combinatorial Libraries.* **Nature Communications** (submitted).  
-> DOI: *to be added upon publication.*
+**SynTwin software (this repository).**  
+Citation metadata is provided in the `CITATION.cff` file.
 
-A `CITATION.cff` file will be added once the DOI is available.
+A DOI for this software release will be added once the Zenodo record is created.
 
----
+**Associated manuscript:**  
+Picó, J.; Arboleda-García, A.; Penas, D.R.; Banga, J.R.; Vignoni, A.; Boada, Y. (2026).  
+*Host-aware Identification of Intrinsic Gene Expression Biopart Parameters using Combinatorial Libraries.*  
+Nature Communications (submitted).  
+DOI: to be added upon publication.
 
 ## License and terms of use (SynTwin code)
 
 **SynTwin code (this repository):**  
-See `LICENSE` at the repository root.
+See `LICENSE.md` at the repository root.
 
 
 ## Contact
 
-For questions, bug reports, or attribution concerns, please open an issue on the repository or contact the corresponding author listed in the manuscript.
+For questions, bug reports, or attribution concerns, please open an issue on the repository or contact jpico@upv.edu.es.
