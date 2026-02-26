@@ -127,26 +127,18 @@ These packages retain their original authorship and licenses. Users are responsi
 
 If you use SynTwin in academic work, please cite the associated manuscript:
 
-> **[Authors]** (YEAR). *Host-aware Identification of Intrinsic Gene Expression Biopart Parameters using Combinatorial Libraries.* **Nature Communications** (under review / in press).  
+> **[Authors]** (2026). *Host-aware Identification of Intrinsic Gene Expression Biopart Parameters using Combinatorial Libraries.* **Nature Communications** (submitted).  
 > DOI: *to be added upon publication.*
 
-A `CITATION.cff` file may be added once the DOI is available.
+A `CITATION.cff` file will be added once the DOI is available.
 
 ---
 
 ## License and terms of use (SynTwin code)
 
 **SynTwin code (this repository):**  
-Choose a project license (e.g., MIT / BSD-3-Clause / Apache-2.0) and include it as `LICENSE` at the repository root.
+See `LICENSE` at the repository root.
 
-**Important:** regardless of the project license you select for *SynTwin code*, third-party components (datasets and external software) keep **their own licenses** and are **not relicensed** by SynTwin.
-
-Recommended practice:
-- keep third-party software under `Matlab/` with their original license files,
-- keep third-party datasets under `Generate_HEM/Third_party_data/` with clear provenance,
-- refer users to `Data Availability & Attribution Statement.md` for required attribution.
-
----
 
 ## Contact
 
