@@ -1,81 +1,34 @@
 %% Estimate_Lib5_L1O_reduced_model
-% SynTwin workflow script: parameter estimation for Lib5 using L1O cross-validation
-% under a reduced setting (estimate promoter strength Omega; inherit RBS/Gene_cn).
-%
-% CONTEXT (Lib5 sublibrary)
-%   Lib5 is a 5-TU sublibrary defined by:
-%     - a single Ori context (pGreen; Ori index fixed to 1),
-%     - a single promoter to estimate (e.g., J23100), and
-%     - five RBS variants (RBS indices: [1 2 3 4 5]).
-%
-%   In this workflow, ONLY the promoter strength parameter Omega is estimated.
-%   All RBS-related parameters (k0_sigma0) and effective gene copy number (Gene_cn)
-%   are inherited from prior inference results:
-%     - From Lib24 (L1O reduced): RBS k0_sigma0 for the RBSs that exist in Lib24.
-%     - From Lib6  (L1O reduced): RBS B0034 (RBS=3) k0_sigma0 and Gene_cn samples.
+% Estimate J23100 promoter strength by leave-one-construct-out analysis.
 %
 % DESCRIPTION
-%   Runs leave-one-out (L1O) cross-validation across Lib5 constructs, where each
-%   L1O iteration leaves out one RBS-defined TU (k = 1..5) from the cost function.
-%   For each left-out construct, the script runs <num_runs> independent BADS
-%   optimizations to estimate the promoter strength Omega by minimizing the
-%   mismatch between experimental synthesis-rate data and SynTwin digital-twin
-%   predictions (Pi).
+%   Runs five folds. In each fold, one Lib5 RBS-defined construct is excluded
+%   and the J23100 promoter parameter, Omega, is estimated from the remaining
+%   four constructs.
 %
-%   Uncertainty propagation:
-%     For each run index num_run, inherited parameters are sampled via a random
-%     Monte Carlo index vector (index_MC_pars). The selected inherited sample is
-%     used consistently within that run across all included (non-left-out) TUs:
-%       - Inherited_ParamsData.Gene_cn_MC_samples(num_run)
-%       - Inherited_ParamsData.RBS{i}.RBS_k0_sigma0_MC_samples(num_run)
-%     while Omega is optimized.
+%   Effective pGreen copy number and RBS kappa^0 values are inherited from the
+%   Lib24 and Lib6 leave-one-out reduced-model tensors. Each optimization run
+%   uses one consistent inherited Monte Carlo realization across all constructs.
 %
-% MODEL SETUP
-%   - Estimated: Omega (promoter strength; e.g., J23100)
-%   - Inherited: RBS k0_sigma0 (per RBS; includes B0034 from Lib6)
-%   - Fixed:     inv_sigma0 (sensitivity-related parameter; fixed inside the cost function)
+% FIXED VALUE
+%   rho^0 = 0.02.
 %
-% INPUTS
-%   None (configuration is set inside the script).
-%   The user must set:
-%     - Use_mean: aggregation level ('Global', 'Instances', or 'Wells')
-%     - num_runs: number of Monte Carlo / optimization runs (e.g., 50–100)
+% OUTPUTS
+%   Estimated_results/
+%       Results_BADS_Lib5_L1O_reduced_14<RBS>_<Use_mean>.mat
 %
-% OUTPUTS (saved to disk)
-%   One file per left-out construct in ./Estimated_results/:
-%     Results_BADS_Lib5_L1O_reduced_<LO_RBS>_<Use_mean>.mat
-%   where <LO_RBS> identifies the left-out RBS index (1..5).
-%
-%   Each file contains a cell array of per-run results:
-%     Results_BADS_J23100_L1O_approx{num_run}.results = [Omega, Jmin]
+%   One file is generated for each left-out RBS-defined construct.
 %
 % DEPENDENCIES
-%   - SynTwin must be initialized before running this script:
-%       ROOT = init_SynTwin(...);
-%   - This folder must be on the MATLAB path (if running from SynTwin root):
-%       addpath(fileparts(mfilename('fullpath')));
-%   - Requires the HEM surrogate:
-%       Generate_HEM/HEM_Surrogate/HEM_Surrogate.mat
-%   - Experimental data container for Lib5:
-%       Experimental_Data/ExpData_Tensor_lib5_micro.mat
-%   - Inherited parameter sources:
-%       * Lib24 (L1O reduced) for RBSs except B0034:
-%           L24_L1O_reduced_model/Results_Tensor_Lib24_L1O_reduced_*.mat
-%       * Lib6 (L1O reduced) for B0034 and Gene_cn:
-%           L6_L1O_reduced_model/Results_Tensor_Lib6_L1O_reduced_*.mat
-%   - Uses: J4_LogPI_Lib5_L1O_reduced (objective function)
-%   - Requires BADS (bundled in SynTwin distribution) and optional Parallel TB.
+%   - J5w_LogPI_Lib5_L1O_reduced
+%   - Results_Tensor_Lib24_L1O_reduced_Wells.mat
+%   - Results_Tensor_Lib6_L1O_reduced_Wells.mat
+%   - BADS, HEM surrogate, and processed Lib5 experimental data
 %
 % USAGE
 %   Estimate_Lib5_L1O_reduced_model
 %
-% NOTES
-%   - L1O here leaves out one RBS-defined TU at a time (Construct_2_LO = 1..5).
-%   - Each BADS run uses one inherited Monte Carlo sample selected via index_MC_pars,
-%     coupling uncertainty propagation to the run index num_run.
-%   - If Parallel Toolbox is unavailable, replace parfor with for.
-%   - Optionally, the user may skip leaving out B0034 (RBS=3) if demonstrating
-%     prediction capability for its Pi–mu characteristic curve is desired.
+% See README.md for the complete workflow.
 
 clearvars;
 close all;
@@ -118,23 +71,43 @@ options.Display='final';
 %Use_mean = 'Instances';  
 %Use_mean = 'Global';  
 Use_mean = 'Wells'; 
-num_runs = 56;  %length(ParamsData_Tensor_libX_micro{1,1,1}.Gene_cn_MC_samples) is 1000
+num_runs = 56;
 
-Inherited_ParamsData={};
-indices_rbss_Lib24_dummy = [1,2,NaN,3,4];
-index_MC_pars = randi([1,length(Results_Tensor_Lib6_L1O_reduced{1,1}.Gene_cn_MC_samples)],num_runs,1);
-Inherited_ParamsData.Gene_cn_MC_samples = Results_Tensor_Lib6_L1O_reduced{1,1}.Gene_cn_MC_samples(index_MC_pars,1);
-for i=1:5
-    if i==3
-        Inherited_ParamsData.RBS{i}.RBS_k0_sigma0_MC_samples = Results_Tensor_Lib6_L1O_reduced{1,1}.RBS_k0_sigma0_MC_samples(index_MC_pars,1);
+Inherited_ParamsData = struct();
+indices_rbss_Lib24 = [1,2,NaN,3,4];
+
+available_samples = numel(Results_Tensor_Lib6_L1O_reduced{1,1}.Gene_cn_MC_samples);
+available_samples = min(available_samples, ...
+    numel(Results_Tensor_Lib6_L1O_reduced{1,1}.RBS_k0_sigma0_MC_samples));
+for rbs_idx = [1,2,4,5]
+    source_idx = indices_rbss_Lib24(rbs_idx);
+    available_samples = min(available_samples, ...
+        numel(Results_Tensor_Lib24_L1O_reduced{1,1,source_idx}.RBS_k0_sigma0_MC_samples));
+end
+if num_runs > available_samples
+    error('Estimate_Lib5_L1O_reduced_model:TooManyRuns', ...
+        'num_runs (%d) exceeds the common inherited sample count (%d).', ...
+        num_runs, available_samples);
+end
+
+index_MC_pars = randi(available_samples,num_runs,1);
+Inherited_ParamsData.Gene_cn_MC_samples = ...
+    Results_Tensor_Lib6_L1O_reduced{1,1}.Gene_cn_MC_samples(index_MC_pars,1);
+
+for rbs_idx = 1:5
+    if rbs_idx == 3
+        source_samples = Results_Tensor_Lib6_L1O_reduced{1,1}.RBS_k0_sigma0_MC_samples;
     else
-         Inherited_ParamsData.RBS{i}.RBS_k0_sigma0_MC_samples = Results_Tensor_Lib24_L1O_reduced{1,1,indices_rbss_Lib24_dummy(i)}.RBS_k0_sigma0_MC_samples(index_MC_pars,:);
+        source_idx = indices_rbss_Lib24(rbs_idx);
+        source_samples = Results_Tensor_Lib24_L1O_reduced{1,1,source_idx}.RBS_k0_sigma0_MC_samples;
     end
+    Inherited_ParamsData.RBS{rbs_idx}.RBS_k0_sigma0_MC_samples = ...
+        source_samples(index_MC_pars,1);
 end
 
 % params: vector of estimated parameters of the model
  % params(1) = Omega, Promoter strength of (J23100)
- x0 = 0.15; % Starting point f
+% x0 = 0.15; % Starting point f
  lb = 0.02;   %lower expected bounds   Promoter Omega,     J23100          
  ub = 1.5;  %upper expected bounds  Promoter Omega,     J23100    
  plb = 0.10;  %Plausible lower bounds 
@@ -145,12 +118,16 @@ end
 % Lib5 bioparts indices:
 indices_rbss = [1,2,3,4,5];  % WE MAY SKIP RBS B0034 (no. 3) if we want to demonstrate that we will be capable to predict its characteristic curve Pi-mu
 num_rbss = length(indices_rbss);
+RBS_inv_sigma0 = 0.02;
+delta = 0.2;  
 for j=1:num_rbss 
-    Construct_2_LO = j %Construct to leave out: RBS (indices_rbss(j) )  in experimental data of Lib5
-    parfor num_run=1:num_runs 
-        J=@(parameters) J4_LogPI_Lib5_L1O_reduced(parameters,Construct_2_LO,model_c,Use_mean,ExpData_Tensor_lib5_micro,Inherited_ParamsData, HEM,num_run);
+    Construct_2_LO = j; % Local Lib5 RBS index of the left-out construct
+    Results_BADS_J23100_L1O_reduced = cell(num_runs,1);
+    parfor num_run = 1:num_runs 
+         x0 = plb + (pub-plb).* rand(1,length(lb));
+        J=@(parameters) J5w_LogPI_Lib5_L1O_reduced(parameters,Construct_2_LO,model_c,Use_mean,ExpData_Tensor_lib5_micro,Inherited_ParamsData, HEM,num_run,RBS_inv_sigma0,delta);
         [params, Jmin_value] = bads(J,x0,lb,ub,plb,pub,[],options);
-         Results_BADS_J23100_L1O_approx{num_run}.results=[params, Jmin_value] 
+        Results_BADS_J23100_L1O_reduced{num_run}.results = [params, Jmin_value];
     end
     % --- Save results to local Estimated_results folder (portable) ---
     results_dir = fullfile(SCRIPT_DIR,'Estimated_results');
@@ -161,7 +138,7 @@ for j=1:num_rbss
                     num2str(indices_rbss(Construct_2_LO)) + "_" + ...
                     Use_mean + ".mat";
     file_tensor = fullfile(results_dir, file_name);
-    save(file_tensor, "Results_BADS_J23100_L1O_approx", "-mat");
+    save(file_tensor, "Results_BADS_J23100_L1O_reduced", "-mat");
 
 end 
 

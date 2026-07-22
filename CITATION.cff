@@ -1,40 +1,62 @@
 cff-version: 1.2.0
 title: "SynTwin: Host-aware Digital Twin for Biopart Characterization"
-message: "If you use this software, please cite it as below."
+message: "If you use this software, please cite it using the metadata provided in this file."
 type: software
+
 authors:
-  - family-names: Picó
-    given-names: Jesús
-    affiliation: Universitat Politècnica de València
-  - family-names: Arboleda-García
-    given-names: Andrés
-    affiliation: Universitat Politècnica de València
-  - family-names: Penas
-    given-names: David R.
-    affiliation: MBG-CSIC
-  - family-names: Banga
-    given-names: Julio R.
-    affiliation: MBG-CSIC
-  - family-names: Vignoni
-    given-names: Alejandro
-    affiliation: Universitat Politècnica de València
-  - family-names: Boada
-    given-names: Yadira
-    affiliation: Universitat Politècnica de València
+  - family-names: "Picó"
+    given-names: "Jesús"
+    affiliation: "Universitat Politècnica de València"
+
+  - family-names: "Arboleda-García"
+    given-names: "Andrés"
+    affiliation: "Universitat Politècnica de València"
+
+  - family-names: "Penas"
+    given-names: "David R."
+    affiliation: "MBG-CSIC"
+
+  - family-names: "Banga"
+    given-names: "Julio R."
+    affiliation: "MBG-CSIC"
+
+  - family-names: "Vignoni"
+    given-names: "Alejandro"
+    affiliation: "Universitat Politècnica de València"
+
+  - family-names: "Boada"
+    given-names: "Yadira"
+    affiliation: "Universitat Politècnica de València"
+
+  - family-names: "Zach"
+    given-names: "Pavel"
+    affiliation: "Universitat Politècnica de València"
+
+repository-code: "https://github.com/sb2cl/SynTwin"
 url: "https://github.com/sb2cl/SynTwin"
+doi: "10.5281/zenodo.18787107"
+
 license: MIT
-version: 1.0.1
-date-released: 2026-02-26
+version: "1.1.0"
+date-released: 2026-07-22
+
 abstract: >
-  SynTwin is a host-aware digital twin framework for quantitative
-  identification of intrinsic gene expression biopart parameters
+  SynTwin is a MATLAB-based host-aware digital twin framework for the
+  quantitative identification of intrinsic gene expression biopart parameters
   using combinatorial libraries under growth-dependent resource constraints.
+  This release provides processed experimental data, parameter-estimation
+  workflows, stored estimation outputs, result-generation and visualization
+  scripts, Host Equivalent Model resources, uncertainty propagation, and local
+  practical-identifiability analyses.
+
 keywords:
   - synthetic biology
   - digital twin
   - gene expression
+  - biopart characterization
   - host-aware modeling
   - parameter estimation
-
+  - combinatorial libraries
+  - practical identifiability
 
  

@@ -1,36 +1,20 @@
 %% Generate_Results_Lib30_ALL_full_model
-% SynTwin workflow script: post-processing and compilation of Lib30 ALL 
-% full-model results.
+% Compile the complete Lib30 result tensor.
 %
-% DESCRIPTION
-%   Loads the per-construct optimization outputs produced by
-%   Estimate_Lib30_ALL_full_model and compiles them into a unified Results tensor
-%   (Global / Instances / Wells), ready for plotting and downstream analysis.
+% Input:
+%   Estimated_results/Results_BADS_Lib30_ALL_complete_<Use_mean>.mat
 %
-% INPUTS
-%   None (loads results from ./Estimated_results/ and uses local configuration).
-%
-%   Configuration is set inside the script.
-%   The user must set the desired <Use_mean> option. Options are: 
-%       - 'Global' (global mean for each construct),
-%       - 'Instances' (mean of each experiment for each construct),
-%       - 'Wells' (use data of all individual culture wells)
-%
-% OUTPUTS (saved to disk)
+% Output:
 %   Results_Tensor_Lib30_ALL_full_model_<Use_mean>.mat
-%     Example: Results_Tensor_Lib30_ALL_full_model_Wells.mat
 %
-% DEPENDENCIES
-%   - SynTwin initialization recommended:
-%       ROOT = init_SynTwin(...);
-%   - Requires that ./Estimated_results/ contains the expected optimization files.
+% The generated tensor contains experimental data, parameter samples and
+% statistics, local sensitivities, growth-rate predictions, and Monte Carlo
+% uncertainty propagation.
 %
-% USAGE
+% Usage:
 %   Generate_Results_Lib30_ALL_full_model
 %
-% NOTES
-%   - Use_mean controls the aggregation level: 'Global', 'Instances', or 'Wells'.
-%   - The output file is typically loaded by Show_Results_* scripts.
+% See README.md for the complete workflow.
 
 % --- Portable project initialization (no absolute paths) ---
 ROOT = init_SynTwin('experimental',true);
@@ -48,8 +32,8 @@ load(SynTwin_path('Experimental_Data','ExpData_Tensor_lib30_micro.mat'));       
 % - 'Wells' (use data of all individual culture wells)
 
 %Use_mean = 'Instances';  
-Use_mean = 'Global';  
-%Use_mean = 'Wells'; 
+%Use_mean = 'Global';  
+Use_mean = 'Wells'; 
 
 indices_plasmids_lib30 = [1,2];
 num_plasmids_Lib30 = length(indices_plasmids_lib30);
@@ -75,7 +59,6 @@ model_c.N_pSC101 = 5; %known
 n_samples_MC = 1000;
 
 % Loads the estimated parameters and generates the structure Estimated_parameters
-Estimated_parameters.TU = {};
 Matrix_tempo_All =[];
 % --- Load estimation results from the local Estimated_results folder (portable) ---
 results_dir = fullfile(SCRIPT_DIR,'Estimated_results');
@@ -84,23 +67,23 @@ if ~exist(results_dir,'dir')
 end
 file_name = "Results_BADS_Lib30_ALL_complete_" +   Use_mean + ".mat";
 file_tensor = fullfile(results_dir, file_name);
-load(file_tensor, "Results_BADS_Lib30_ALL_complete_v2", "-mat");
-num_runs = length(Results_BADS_Lib30_ALL_complete_v2);
-tempo = [];
-for i=1:num_runs
-   tempo=[tempo;Results_BADS_Lib30_ALL_complete_v2{i}.results(:,1:14)];
-   Matrix_tempo_All=[Matrix_tempo_All;Results_BADS_Lib30_ALL_complete_v2{i}.results(:,1:14)];
+load(file_tensor, "Results_BADS_Lib30_ALL_complete", "-mat");
+num_runs = length(Results_BADS_Lib30_ALL_complete);
+for run_idx = 1:num_runs
+    Matrix_tempo_All = [Matrix_tempo_All; Results_BADS_Lib30_ALL_complete{run_idx}.results]; %#ok<AGROW>
 end
-Estimated_parameters.ALL_raw = Matrix_tempo_All;
-Estimated_parameters.ALL_mean = mean(Matrix_tempo_All,1);
-Estimated_parameters.ALL_std = std(Matrix_tempo_All,0,1);
+Estimated_parameters.ALL_raw = Matrix_tempo_All(:,1:14);
+Estimated_parameters.ALL_mean = mean(Estimated_parameters.ALL_raw,1);
+Estimated_parameters.ALL_std = std(Estimated_parameters.ALL_raw,0,1);
+Estimated_parameters.J_raw = Matrix_tempo_All(:,15);
+Estimated_parameters.X0_raw = Matrix_tempo_All(:,16:end);
 
 
 % Adds the experimental data to the structure
-% Results_Tensor_Lib30_L1O_complete
+% Results_Tensor_Lib30_ALL_complete
 Results_Tensor_Lib30_ALL_complete = ExpData_Tensor_lib30_micro;
 
-% Adds the estimated parameters and their statistics to the structure Results_Tensor_Lib30_L1O_complete
+% Adds the estimated parameters and their statistics to the structure Results_Tensor_Lib30_ALL_complete
 for p=1:length(indices_plasmids_lib30)
     for q=1:length(indices_promoters_lib30)
         for r=1:length(indices_rbss_lib30)
@@ -128,7 +111,7 @@ for p=1:length(indices_plasmids_lib30)
             Results_Tensor_Lib30_ALL_complete{p,q,r}.RBS_inv_sigma0_mean = Estimated_parameters.ALL_mean(:,num_promoters_Lib30+num_rbss_Lib30+r); 
             Results_Tensor_Lib30_ALL_complete{p,q,r}.RBS_inv_sigma0_std = Estimated_parameters.ALL_std(:,num_promoters_Lib30+num_rbss_Lib30+r);
 
-            %Get the sensitivities of the synthesis rate w.r.t. the estimated parameters at the experimental values of growth ate:
+            %Get the sensitivities of the synthesis rate w.r.t. the estimated parameters at the experimental values of growth rate:
               % GLOBAL 
               Mu_vector = Results_Tensor_Lib30_ALL_complete{p,q,r}.Mu_mumax_pmax_global_mean;
               Synthesis_predictions = Get_synthesis_predictions(HEM,model_c,Mu_vector,Results_Tensor_Lib30_ALL_complete{p,q,r}.RBS_k0_sigma0_mean,...
@@ -216,6 +199,6 @@ end %plasmids
 % --- Save generated results in the same folder as this script (portable) ---
 file_name  = "Results_Tensor_Lib30_ALL_full_model_" + Use_mean + ".mat";
 file_tensor = fullfile(SCRIPT_DIR, file_name);
-save(file_tensor, "Results_Tensor_Lib30_ALL_complete", "-mat");
+save(file_tensor, "Results_Tensor_Lib30_ALL_complete", "Estimated_parameters", "-mat");
 
 

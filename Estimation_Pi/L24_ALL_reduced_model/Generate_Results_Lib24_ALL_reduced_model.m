@@ -77,7 +77,6 @@ n_samples_MC = 1000;
 RBS_inv_sigma0 = 0.02;
 
 % Loads the estimated parameters and generates the structure Estimated_parameters
-Estimated_parameters.TU = {};
 Matrix_tempo_All =[];
 % --- Load estimation results from the local Estimated_results folder (portable) ---
 results_dir = fullfile(SCRIPT_DIR,'Estimated_results');
@@ -86,14 +85,16 @@ if ~exist(results_dir,'dir')
 end
 file_name = "Results_BADS_Lib24_ALL_reduced_" +   Use_mean + ".mat";
 file_tensor = fullfile(results_dir, file_name);
-load(file_tensor, "Results_BADS_Lib24_ALL_approx", "-mat");
-num_runs = length(Results_BADS_Lib24_ALL_approx);
+load(file_tensor, "Results_BADS_Lib24_ALL_reduced", "-mat");
+num_runs = length(Results_BADS_Lib24_ALL_reduced);
 for i=1:num_runs
-   Matrix_tempo_All=[Matrix_tempo_All;Results_BADS_Lib24_ALL_approx{i}.results(:,1:8)];
+   Matrix_tempo_All=[Matrix_tempo_All;Results_BADS_Lib24_ALL_reduced{i}.results];
 end
-Estimated_parameters.ALL_raw = Matrix_tempo_All;
-Estimated_parameters.ALL_mean = mean(Matrix_tempo_All,1);
-Estimated_parameters.ALL_std = std(Matrix_tempo_All,0,1);
+Estimated_parameters.ALL_raw = Matrix_tempo_All(:,1:8);
+Estimated_parameters.ALL_mean = mean(Estimated_parameters.ALL_raw,1);
+Estimated_parameters.ALL_std = std(Estimated_parameters.ALL_raw,0,1);
+Estimated_parameters.J_raw = Matrix_tempo_All(:,9);
+Estimated_parameters.X0_raw = Matrix_tempo_All(:,10:end);
 
 % Adds the experimental data to the structure Results_Tensor_Lib24_ALL_reduced
 Results_Tensor_Lib24_ALL_reduced = ExpData_Tensor_lib24_micro;
@@ -211,4 +212,4 @@ end %plasmids
 % --- Save generated results in the same folder as this script (portable) ---
 file_name  = "Results_Tensor_Lib24_ALL_reduced_model_" + Use_mean + ".mat";
 file_tensor = fullfile(SCRIPT_DIR, file_name);
-save(file_tensor, "Results_Tensor_Lib24_ALL_reduced", "-mat");
+save(file_tensor, "Results_Tensor_Lib24_ALL_reduced", "Estimated_parameters","-mat");

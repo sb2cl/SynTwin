@@ -1,0 +1,393 @@
+%% Show_Robustness_dma_Lib30_ALL_reduced_model
+% Analyze robustness of Lib30 parameter estimates to fixed d_mA values.
+%
+% Compares d_mA = 0.15, 0.17, 0.20, 0.22, and 0.25 min^-1, using 0.20
+% min^-1 as the reference. The analysis includes three promoter rates, five
+% RBS intrinsic initiation capacities, and the effective pGreen copy number.
+%
+% Outputs:
+%   Figures/  PNG and SVG figures.
+%   Tables/   CSV summaries.
+%
+% Usage:
+%   Show_Robustness_dma_Lib30_ALL_reduced_model
+%
+% See README.md for the complete workflow.
+
+clear; clc;
+
+% --- Portable project initialization (no absolute paths) ---
+ROOT = init_SynTwin(); %#ok<NASGU>
+SCRIPT_DIR = fileparts(mfilename('fullpath'));
+addpath(SCRIPT_DIR);
+FIGURES_DIR = fullfile(SCRIPT_DIR,'Figures');
+TABLES_DIR = fullfile(SCRIPT_DIR,'Tables');
+if ~exist(FIGURES_DIR,'dir'), mkdir(FIGURES_DIR); end
+if ~exist(TABLES_DIR,'dir'), mkdir(TABLES_DIR); end
+
+% =========================
+% Model / library setup
+% =========================
+model_c.lp_c = 240; % GFP protein length (aa)
+model_c.le_c = model_c.lp_c^0.097/0.0703;
+model_c.Em_c = model_c.lp_c/model_c.le_c * ...
+    (1 - (model_c.lp_c/(model_c.lp_c+model_c.le_c))^(model_c.lp_c/model_c.le_c));
+model_c.WEm_c = 1 + 1/model_c.Em_c;
+model_c.N_pSC101 = 5; % known
+
+Use_mean = 'Wells';
+set_dma = [0.15, 0.17, 0.20, 0.22, 0.25];
+dm_ref = 0.20;
+
+% Parameter indices / names / groups
+idx.J23106 = 1;
+idx.J23102 = 2;
+idx.J23101 = 3;
+idx.B0030  = 4;
+idx.B0032  = 5;
+idx.B0034  = 6;
+idx.J61100 = 7;
+idx.J61101 = 8;
+idx.pGreen = 9; % multiplier relative to pSC101=5
+
+param_names = {'J23106','J23102','J23101','B0030','B0032','B0034','J61100','J61101','pGreen'};
+param_family = {'Promoter','Promoter','Promoter','RBS','RBS','RBS','RBS','RBS','Plasmid'};
+group_map = {1:3, 4:8, 9};
+group_titles = {'Promoters','RBSs','pGreen'};
+n_params = numel(param_names);
+
+dma_values = set_dma(:);
+ndma = numel(dma_values);
+
+% =========================
+% Load results
+% =========================
+Results_parameters_case = cell(ndma,1);
+theta_by_case = cell(ndma,1);
+J_by_case = cell(ndma,1);
+runs_per_case = zeros(ndma,1);
+
+for i = 1:ndma
+    model_c.dm_c = dma_values(i);
+    file_name = "Results_Tensor_Lib30_ALL_reduced_model_" + ...
+                Use_mean + "_dma_" + extractAfter(num2str(model_c.dm_c), '.') + ".mat";
+    S = load(fullfile(SCRIPT_DIR, file_name));
+
+    Results_parameters_case{i} = S.Estimated_parameters;
+    theta_i = S.Estimated_parameters.ALL_raw;
+    theta_i(:,idx.pGreen) = 5 * theta_i(:,idx.pGreen); % actual copy number
+    theta_by_case{i} = theta_i;
+    J_by_case{i} = S.Estimated_parameters.J_raw(:);
+    runs_per_case(i) = size(theta_i,1);
+end
+
+% =========================
+% Summaries by dmA
+% =========================
+Theta_median = zeros(ndma, n_params);
+Theta_q25 = zeros(ndma, n_params);
+Theta_q75 = zeros(ndma, n_params);
+J_median = zeros(ndma,1);
+J_q25 = zeros(ndma,1);
+J_q75 = zeros(ndma,1);
+
+for i = 1:ndma
+    Theta_median(i,:) = median(theta_by_case{i},1);
+    Theta_q25(i,:) = prctile(theta_by_case{i},25,1);
+    Theta_q75(i,:) = prctile(theta_by_case{i},75,1);
+    J_median(i) = median(J_by_case{i});
+    J_q25(i) = prctile(J_by_case{i},25);
+    J_q75(i) = prctile(J_by_case{i},75);
+end
+
+[~, i_ref] = min(abs(dma_values - dm_ref));
+theta_ref = Theta_median(i_ref,:);
+J_ref = J_median(i_ref);
+
+J_rel_median = 100*(J_median - J_ref)/J_ref;
+J_rel_q25 = zeros(ndma,1);
+J_rel_q75 = zeros(ndma,1);
+for i = 1:ndma
+    J_rel_i = 100*(J_by_case{i} - J_ref)/J_ref;
+    J_rel_q25(i) = prctile(J_rel_i,25);
+    J_rel_q75(i) = prctile(J_rel_i,75);
+end
+
+% Log-log sensitivities from medians across dmA
+log_dm = log(dma_values);
+Sens_loglog = nan(1, n_params);
+Sens_loglog_R2 = nan(1, n_params);
+for j = 1:n_params
+    y = log(Theta_median(:,j));
+    p = polyfit(log_dm, y, 1);
+    yhat = polyval(p, log_dm);
+    Sens_loglog(j) = p(1);
+    ss_res = sum((y - yhat).^2);
+    ss_tot = sum((y - mean(y)).^2);
+    Sens_loglog_R2(j) = 1 - ss_res/ss_tot;
+end
+
+% =========================
+% Balanced collapsed sampling across dmA
+% =========================
+% To avoid over-representing dmA = 0.2, use the same number of runs per dmA.
+rng(1, 'twister');
+target_runs = min(runs_per_case);
+theta_balanced = cell(ndma,1);
+
+for i = 1:ndma
+    n_i = size(theta_by_case{i},1);
+    if n_i > target_runs
+        idx_sel = randperm(n_i, target_runs);
+    else
+        idx_sel = 1:n_i;
+    end
+    theta_balanced{i} = theta_by_case{i}(idx_sel,:);
+end
+
+collapsed_balanced = cell(1, n_params);
+for j = 1:n_params
+    vals_abs = [];
+    for i = 1:ndma
+        vals_abs = [vals_abs; theta_balanced{i}(:,j)]; %#ok<AGROW>
+    end
+    collapsed_balanced{j} = vals_abs;
+end
+
+collapsed_summary = table(param_names(:), param_family(:), theta_ref(:), ...
+    cellfun(@median, collapsed_balanced(:)), ...
+    cellfun(@(x) prctile(x,25), collapsed_balanced(:)), ...
+    cellfun(@(x) prctile(x,75), collapsed_balanced(:)), ...
+    'VariableNames', {'Parameter','Family','RefMedian_dmA_0p2', ...
+    'CollapsedMedian_balanced','CollapsedQ25_balanced','CollapsedQ75_balanced'});
+
+sensitivity_summary = table(param_names(:), param_family(:), Sens_loglog(:), Sens_loglog_R2(:), ...
+    'VariableNames', {'Parameter','Family','LogLogSensitivity','R2'});
+
+cost_summary = table(dma_values, runs_per_case, J_median, J_q25, J_q75, J_rel_median, J_rel_q25, J_rel_q75, ...
+    'VariableNames', {'dmA','Nruns','J_median','J_q25','J_q75','DeltaJ_median_percent','DeltaJ_q25_percent','DeltaJ_q75_percent'});
+
+writetable(cost_summary, fullfile(TABLES_DIR, 'Table_Lib30_dmA_cost_summary.csv'));
+writetable(sensitivity_summary, fullfile(TABLES_DIR, 'Table_Lib30_dmA_loglog_sensitivity.csv'));
+writetable(collapsed_summary, fullfile(TABLES_DIR, 'Table_Lib30_dmA_collapsed_grouped_balanced_summary.csv'));
+
+% =========================
+% Shared aesthetics
+% =========================
+cmap = parula(ndma);
+family_colors = containers.Map({'Promoter','RBS','Plasmid'}, ...
+    {[0.35 0.58 0.86], [0.42 0.72 0.46], [0.88 0.62 0.32]});
+
+baseFont = 13;
+titleFont = 14;
+labelFont = 13;
+axisLineWidth = 1.0;
+gridAlpha = 0.16;
+figColor = 'w';
+
+% =========================
+% FIGURE 1: Cost function + sensitivities
+% =========================
+fig1 = figure('Units','centimeters','Position',[2 2 30 12], 'Color', figColor);
+tiledlayout(1,2,'TileSpacing','compact','Padding','compact');
+
+% Panel A: cost relative to reference
+nexttile; hold on;
+for i = 1:ndma
+    plot([dma_values(i), dma_values(i)], [J_rel_q25(i), J_rel_q75(i)], 'k-', 'LineWidth', 1.8);
+    plot(dma_values(i), J_rel_median(i), 'o', ...
+        'MarkerFaceColor', cmap(i,:), 'MarkerEdgeColor', 'k', 'MarkerSize', 7.0);
+end
+plot(dma_values, J_rel_median, 'k-', 'LineWidth', 1.0);
+yline(0,'k--','LineWidth',1.0);
+xlabel('$d_{mA}$','Interpreter','latex','FontSize',labelFont);
+ylabel('relative cost change (%)','FontSize',labelFont);
+title('Cost function values relative to $d_{mA}=0.2$','Interpreter','latex','FontSize',titleFont);
+set(gca,'FontSize',baseFont,'LineWidth',axisLineWidth,'Layer','top');
+grid on; box on;
+ax = gca; ax.GridAlpha = gridAlpha; ax.MinorGridAlpha = gridAlpha*0.9;
+
+% Panel B: sensitivities
+nexttile; hold on;
+bar(Sens_loglog, 'FaceColor', [0.78 0.84 0.92], 'EdgeColor', 'k', 'LineWidth', 0.8);
+yline(0,'k-','LineWidth',0.8);
+xticks(1:n_params);
+xticklabels(param_names);
+xtickangle(45);
+ylabel('$S$ in $\theta \propto d_{mA}^{S}$','Interpreter','latex','FontSize',labelFont);
+title('Log-log sensitivities of inferred parameters','Interpreter','latex','FontSize',titleFont);
+set(gca,'FontSize',baseFont,'LineWidth',axisLineWidth,'Layer','top');
+grid on; box on;
+ax = gca; ax.GridAlpha = gridAlpha; ax.MinorGridAlpha = gridAlpha*0.9;
+
+export_figure(fig1, fullfile(FIGURES_DIR, 'Fig_Lib30_dmA_CostAndSensitivity'));
+
+% =========================
+% FIGURE 2: Individual parameter distributions vs dmA
+% =========================
+fig2 = figure('Units','centimeters','Position',[2 2 32 22], 'Color', figColor);
+tiledlayout(3,3,'TileSpacing','compact','Padding','compact');
+
+for j = 1:n_params
+    nexttile; hold on;
+    ymin_local = inf;
+    ymax_local = -inf;
+
+    for i = 1:ndma
+        data = theta_by_case{i}(:,j);
+        simple_violin(data, i, cmap(i,:), 0.33, true, 0.16);
+        ymin_local = min(ymin_local, min(data));
+        ymax_local = max(ymax_local, max(data));
+    end
+
+    plot([1, ndma], [theta_ref(j), theta_ref(j)], 'r--', 'LineWidth', 1.0);
+    title(sprintf('%s (%s)', param_names{j}, param_family{j}), 'Interpreter', 'none', 'FontSize', titleFont);
+    xticks(1:ndma);
+    xticklabels(compose('%.2f', dma_values));
+    xlabel('$d_{mA}$','Interpreter','latex','FontSize',labelFont);
+    ylabel('estimate','FontSize',labelFont);
+    xlim([0.45, ndma+0.55]);
+    if ymin_local > 0
+        pad = 0.08*(ymax_local - ymin_local + eps);
+        ylim([max(0, ymin_local - pad), ymax_local + pad]);
+    end
+    set(gca,'FontSize',baseFont,'LineWidth',axisLineWidth,'Layer','top');
+    grid on; box on;
+    ax = gca; ax.GridAlpha = gridAlpha; ax.MinorGridAlpha = gridAlpha*0.9;
+end
+
+export_figure(fig2, fullfile(FIGURES_DIR, 'Fig_Lib30_dmA_IndividualViolins_ByParameter'));
+
+% =========================
+% FIGURE 3: Balanced collapsed violins by group (absolute values, log scale)
+% =========================
+fig3 = figure('Units','centimeters','Position',[2 2 28 10.5], 'Color', figColor);
+tiledlayout(1,3,'TileSpacing','compact','Padding','compact');
+
+for g = 1:3
+    idxs = group_map{g};
+    nexttile; hold on;
+
+    local_vals = [];
+    for k = 1:numel(idxs)
+        j = idxs(k);
+        base_color = family_colors(param_family{j});
+
+        % Collapsed balanced distribution across all dmA values
+        data_collapsed = collapsed_balanced{j};
+        data_collapsed = data_collapsed(data_collapsed > 0 & isfinite(data_collapsed));
+
+        % Reference distribution at dmA = 0.2 only
+        data_ref = theta_by_case{i_ref}(:,j);
+        data_ref = data_ref(data_ref > 0 & isfinite(data_ref));
+
+        % Light, wider violin: collapsed balanced distribution
+        simple_violin(data_collapsed, k, base_color, 0.34, true, 0.10);
+
+        % Darker, narrower violin: reference distribution
+        dark_color = max(0, base_color * 0.60);
+        simple_violin(data_ref, k, dark_color, 0.18, true, 0.18);
+
+        % Marker at the reference median
+        plot(k, theta_ref(j), 'kd', ...
+            'MarkerFaceColor', 'k', ...
+            'MarkerSize', 4.8, ...
+            'LineWidth', 1.0);
+
+        local_vals = [local_vals; data_collapsed(:); data_ref(:)]; %#ok<AGROW>
+    end
+
+    set(gca, 'YScale', 'log');
+
+    if ~isempty(local_vals)
+        ymin = min(local_vals);
+        ymax = max(local_vals);
+        if ymin > 0 && ymax > ymin
+            ylim([10^(log10(ymin)-0.15), 10^(log10(ymax)+0.15)]);
+        end
+    end
+
+    xticks(1:numel(idxs));
+    xticklabels(param_names(idxs));
+    if numel(idxs) > 1
+        xtickangle(25);
+    end
+
+    ylabel('parameter estimate','FontSize',labelFont);
+    title(group_titles{g}, 'Interpreter','none', 'FontSize', titleFont);
+    xlim([0.45, numel(idxs)+0.55]);
+    set(gca,'FontSize',baseFont,'LineWidth',axisLineWidth,'Layer','top');
+    grid on; box on;
+    ax = gca; ax.GridAlpha = gridAlpha; ax.MinorGridAlpha = gridAlpha*0.9;
+end
+
+export_figure(fig3, fullfile(FIGURES_DIR, 'Fig_Lib30_dmA_CollapsedViolins_Grouped_Balanced_AbsoluteLog_OverlayRef'));
+
+% =========================
+% Console summary
+% =========================
+fprintf('\n=== dmA robustness summary ===\n');
+fprintf('Reference dmA = %.3f\n', dm_ref);
+fprintf('Balanced collapsed analysis uses %d runs per dmA.\n', target_runs);
+disp(cost_summary);
+disp(sensitivity_summary);
+disp(collapsed_summary);
+
+% =========================
+% Local helpers
+% =========================
+function simple_violin(data, xpos, faceColor, halfWidth, showMedian, pointAlpha)
+    data = data(:);
+    data = data(isfinite(data));
+    if isempty(data)
+        return;
+    end
+
+    n = numel(data);
+    if n == 1 || max(data) == min(data)
+        plot(xpos, data, 'o', 'Color', faceColor, 'MarkerFaceColor', faceColor, 'MarkerSize', 5);
+        return;
+    end
+
+    try
+        [f, yi] = ksdensity(data, 'NumPoints', 200);
+    catch
+        yi = linspace(min(data), max(data), 200);
+        bw = 1.06 * std(data) * n^(-1/5);
+        if ~isfinite(bw) || bw <= 0
+            bw = (max(data)-min(data))/20 + eps;
+        end
+        f = zeros(size(yi));
+        for ii = 1:n
+            f = f + exp(-0.5*((yi-data(ii))/bw).^2);
+        end
+        f = f/(n*bw*sqrt(2*pi));
+    end
+
+    if max(f) > 0
+        f = f / max(f) * halfWidth;
+    end
+
+    patch([xpos + f, fliplr(xpos - f)], [yi, fliplr(yi)], faceColor, ...
+        'FaceAlpha', 0.45, 'EdgeColor', faceColor, 'LineWidth', 1.0);
+
+    jitter = (rand(n,1)-0.5) * halfWidth * 0.50;
+    scatter(xpos + jitter, data, 8, 'MarkerFaceColor', faceColor, ...
+        'MarkerEdgeColor', 'none', 'MarkerFaceAlpha', pointAlpha);
+
+    q = prctile(data, [25 50 75]);
+    plot([xpos-halfWidth*0.22, xpos+halfWidth*0.22], [q(1) q(1)], 'k-', 'LineWidth', 1.0);
+    plot([xpos-halfWidth*0.22, xpos+halfWidth*0.22], [q(3) q(3)], 'k-', 'LineWidth', 1.0);
+    plot([xpos, xpos], [q(1), q(3)], 'k-', 'LineWidth', 1.0);
+
+    if showMedian
+        plot([xpos-halfWidth*0.28, xpos+halfWidth*0.28], [q(2) q(2)], 'k-', 'LineWidth', 1.5);
+    end
+end
+
+function export_figure(fig_handle, file_base)
+    set(fig_handle, 'PaperPositionMode', 'auto');
+    drawnow;
+    exportgraphics(fig_handle, [file_base '.png'], 'Resolution', 300);
+    exportgraphics(fig_handle, [file_base '.svg'], 'ContentType', 'vector');
+end

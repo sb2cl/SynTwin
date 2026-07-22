@@ -143,10 +143,10 @@ grid on, ylabel('$\hat{\Phi}_R$','FontSize',18,'Interpreter','latex');
 xlabel('$\mu\, (\mathrm{min}^{-1})$','FontSize',18,'Interpreter','latex');
 legend('$\Phi_R$','$\hat{\Phi}_R$','Interpreter','latex','Location','southeast','FontSize',16)
 ax=gca;
-ax.XAxis.FontSize = 16;
-ax.YAxis.FontSize = 16;
+ax.XAxis.FontSize = 18;
 ax.YAxis.FontSize = 18;
-ax.YLabel.FontSize = 18;
+ax.YAxis.FontSize = 20;
+ax.YLabel.FontSize = 20;
 
 nexttile
 hold on 
@@ -156,8 +156,21 @@ grid on, ylabel('$\hat{\nu}_t$','FontSize',18,'Interpreter','latex');
 xlabel('$\mu\, (\mathrm{min}^{-1})$','FontSize',18,'Interpreter','latex');
 legend('$\nu_t$','$\hat{\nu}_t$','Interpreter','latex','Location','southeast','FontSize',16)
 ax=gca;
-ax.XAxis.FontSize = 16;
-ax.YAxis.FontSize = 16;
+ax.XAxis.FontSize = 18;
 ax.YAxis.FontSize = 18;
-ax.YLabel.FontSize = 18;
+ax.YAxis.FontSize = 20;
+ax.YLabel.FontSize = 20;
+
+figure();
+hold on 
+plot(Mu_exp_nut, Nu_t_exp,'linestyle','none','Marker','o','MarkerSize', 8,'MarkerFaceColor','g','HandleVisibility','on')
+plot( mu_test, predicted_nut_mu( mu_test),'linestyle','-','Linewidth',4,'Color','r','HandleVisibility','on')
+grid on, ylabel('$\hat{\nu}_t$','FontSize',18,'Interpreter','latex');
+xlabel('$\mu\, (\mathrm{min}^{-1})$','FontSize',18,'Interpreter','latex');
+legend('$\nu_t$','$\hat{\nu}_t$','Interpreter','latex','Location','southeast','FontSize',16)
+ax=gca;
+ax.XAxis.FontSize = 18;
+ax.YAxis.FontSize = 18;
+ax.YAxis.FontSize = 20;
+ax.YLabel.FontSize = 20;
 

@@ -1,65 +1,32 @@
 %% Estimate_Lib6_ALL_reduced_model
-% SynTwin workflow script: parameter estimation for the L6 sublibrary using ALL TUs
-% under the reduced model (estimate a single shared-RBS k0_sigma0; fix inv_sigma0).
-%
-% CONTEXT (L6 sublibrary)
-%   L6 is a 6-TU sublibrary defined by 2 plasmid origins and 3 promoters,
-%   sharing a common RBS (6 combinations in total). In this workflow, the
-%   origin- and promoter-dependent parameters (e.g., Omega and effective gene
-%   copy number) are NOT re-estimated; instead, they are inherited from Lib24
-%   inference results.
+% Estimate the shared B0034 parameter using all six Lib6 constructs.
 %
 % DESCRIPTION
-%   Runs <num_runs> independent estimations of the shared-RBS intrinsic initiation
-%   capacity (k0_sigma0) using ALL TUs in the L6 sublibrary. Each run uses BADS to
-%   minimize the library-scale mismatch between experimental synthesis-rate data
-%   and SynTwin digital-twin predictions (Pi).
+%   Lib6 combines two plasmid backbones and three promoters with the shared
+%   B0034 RBS. The workflow estimates only the B0034 intrinsic initiation
+%   capacity, kappa^0. Promoter rates and effective plasmid copy numbers are
+%   inherited from the Lib24 leave-one-out reduced-model tensor.
 %
-%   Importantly, the workflow propagates uncertainty from inherited Lib24
-%   parameters by selecting, for each run index num_run, the corresponding Monte
-%   Carlo sample of:
-%       - Omega (context-dependent promoter/transcription term), and
-%       - Gene_cn (effective gene copy number),
-%   and keeping these inherited values fixed while estimating the L6 RBS parameter.
+%   For optimization run num_run, the objective uses the corresponding
+%   inherited Lib24 Monte Carlo samples of Omega and Gene_cn. This propagates
+%   uncertainty from the previously characterized promoter and plasmid parts.
 %
-% MODEL SETUP (reduced model for RBSs)
-%   - Estimated: k0_sigma0 (intrinsic initiation capacity of the shared RBS)
-%   - Fixed:     inv_sigma0 (sensitivity-related parameter; fixed inside the cost function)
+% FIXED VALUE
+%   rho^0 = 0.02.
 %
-% INPUTS
-%   None (configuration is set inside the script).
-%   The user must set:
-%     - Use_mean: aggregation level ('Global', 'Instances', or 'Wells')
-%     - num_runs: number of Monte Carlo / optimization runs (e.g., 100)
-%
-% OUTPUTS (saved to disk)
-%   ./Estimated_results/Results_BADS_Lib6_ALL_reduced_<Use_mean>.mat
-%     Contains a cell array of per-run results:
-%       Results_BADS_B0034_ALL_approx{num_run}.results = [k0_sigma0, Jmin]
+% OUTPUT
+%   Estimated_results/
+%       Results_BADS_Lib6_ALL_reduced_<Use_mean>.mat
 %
 % DEPENDENCIES
-%   - SynTwin must be initialized before running this script:
-%       ROOT = init_SynTwin(...);
-%   - This folder must be on the MATLAB path (if running from SynTwin root):
-%       addpath(fileparts(mfilename('fullpath')));
-%   - Requires the HEM surrogate:
-%       Generate_HEM/HEM_Surrogate/HEM_Surrogate.mat
-%   - Experimental data container (L6 is extracted by indexing):
-%       Experimental_Data/ExpData_Tensor_lib30_micro.mat
-%   - Inherited Lib24 parameter samples (Omega and Gene_cn):
-%       Results_Tensor_Lib24_*.mat (loaded and mapped into ParamsData_lib24)
-%   - Uses: J4_LogPI_L6_ALL_reduced (objective function)
-%   - Requires BADS (bundled in SynTwin distribution) and optional Parallel TB.
+%   - Results_Tensor_Lib24_L1O_reduced_Wells.mat
+%   - J5w_LogPI_Lib6_ALL_reduced
+%   - BADS, HEM surrogate, and processed Lib30 experimental data
 %
 % USAGE
-%   Estimate_L6_ALL_reduced
+%   Estimate_Lib6_ALL_reduced_model
 %
-% NOTES
-%   - The L6 experimental measurements are retrieved from the Lib30 tensor-format
-%     container by selecting the appropriate indices (2 oris, 3 promoters, RBS=3).
-%   - If Parallel Toolbox is unavailable, replace parfor with for.
-%   - This script is designed to quantify the impact of uncertainty in inherited
-%     Lib24 parameters on the inferred shared-RBS initiation capacity in L6.
+% See README.md for the complete workflow.
 
 clearvars;
 close all;
@@ -73,8 +40,7 @@ addpath(SCRIPT_DIR);
 
 % --- Load data using portable absolute paths ---
 load(SynTwin_path('Generate_HEM','HEM_Surrogate','HEM_Surrogate.mat'));          % loads data of the Host Equivalent Model (HEM) 
-% Getting the data of Lib30 WE USE THIS AS BASE TO GET THE EXPERIMENTAL DATA EVEN IF WE ONLY TAKE A
-% SUB-LIBRARY OF 24 TUs HERE
+% Lib6 experimental data are selected from the Lib30-format tensor.
 load(SynTwin_path('Experimental_Data','ExpData_Tensor_lib30_micro.mat'));        % loads data of Lib30: ExpData_Tensor_lib30_micro
 
 % Getting the data of Lib24 L1O reduced model (we ONLY use the estimated parameters from this file): 
@@ -99,7 +65,7 @@ options.Display='final';
 %Use_mean = 'Instances';  
 %Use_mean = 'Global';  
 Use_mean = 'Wells'; 
-num_runs = 100;  %length(ParamsData_Tensor_lib24_micro{1,1,1}.Gene_cn_MC_samples) is 1000
+num_runs = 98;
 
 
 indices_plasmids = [1,2];
@@ -115,18 +81,36 @@ end
 
 % params: vector of estimated parameters of the model
  % params(1) = RBS_k0_sigma0, RBS IIC of (B0034)
- x0 = 0.13; % Starting point for RBS_k0_sigma0
+ %x0 = 0.13; % Starting point for RBS_k0_sigma0
  lb = 0.05;   %lower expected bounds for RBS_k0_sigma0,      B0034         
  ub = 0.5;  %upper expected bounds for RBS_k0_sigma0,  B0034
  plb = 0.08;  %Plausible lower bounds bounds for RBS_k0_sigma0, 
  pub =  0.16; %Plausible upper bounds bounds for RBS_k0_sigma0
 
- % Run BADS, which returns the minimum X and its value FVAL.
+% Verify that every requested run has a corresponding inherited sample.
+available_samples = inf;
+for i = 1:numel(indices_plasmids)
+    for j = 1:numel(indices_promoters)
+        available_samples = min(available_samples, ...
+            min(numel(ParamsData_lib24{i,j}.Gene_cn_MC_samples), ...
+                numel(ParamsData_lib24{i,j}.Omega_MC_samples)));
+    end
+end
+if num_runs > available_samples
+    error('Estimate_Lib6_ALL_reduced_model:TooManyRuns', ...
+        'num_runs (%d) exceeds the available inherited Lib24 samples (%d).', ...
+        num_runs, available_samples);
+end
 
-parfor num_run=1:num_runs 
-    J=@(parameters) J4_LogPI_L6_ALL_reduced(parameters,model_c,Use_mean,ExpData_Tensor_lib30_micro,ParamsData_lib24, HEM,num_run);
+% Run BADS, which returns the minimum X and its value FVAL.
+ RBS_inv_sigma0 = 0.02;
+delta = 0.2;       
+Results_BADS_B0034_ALL_reduced = cell(num_runs,1);
+parfor num_run = 1:num_runs 
+     x0 = plb + (pub-plb).* rand(1,length(lb));
+    J=@(parameters) J5w_LogPI_Lib6_ALL_reduced(parameters,model_c,Use_mean,ExpData_Tensor_lib30_micro,ParamsData_lib24, HEM,num_run,RBS_inv_sigma0,delta);
     [params, Jmin_value] = bads(J,x0,lb,ub,plb,pub,[],options);
-     Results_BADS_B0034_ALL_approx{num_run}.results=[params, Jmin_value]; 
+     Results_BADS_B0034_ALL_reduced{num_run}.results=[params, Jmin_value]; 
 end
 
 % --- Save results to local Estimated_results folder (portable) ---
@@ -136,5 +120,5 @@ if ~exist(results_dir,'dir')
 end
 file_name = "Results_BADS_Lib6_ALL_reduced_"  + Use_mean + ".mat";
 file_tensor = fullfile(results_dir, file_name);
-save(file_tensor, "Results_BADS_B0034_ALL_approx", "-mat");
+save(file_tensor, "Results_BADS_B0034_ALL_reduced", "-mat");
 

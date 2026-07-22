@@ -1,72 +1,33 @@
 %% Estimate_Lib6_L1O_reduced_model
-% SynTwin workflow script: parameter estimation for the L6 sublibrary using
-% Leave-One-Out (L1O) cross-validation under the reduced model
-% (estimate a single shared-RBS k0_sigma0; fix inv_sigma0).
-%
-% CONTEXT (L6 sublibrary)
-%   L6 is a 6-TU sublibrary defined by:
-%     - 2 plasmid origins (Ori indices: [1 2])
-%     - 3 promoters       (Promoter indices: [1 2 3])
-%     - 1 shared RBS      (RBS index: [3], e.g. B0034)
-%
-%   In this workflow, only the shared RBS intrinsic initiation capacity
-%   k0_sigma0 is estimated. All Ori- and promoter-related parameters are
-%   inherited from Lib24 inference results (Omega and Gene_cn), while known
-%   constants (e.g. pSC101 baseline copy number) are provided via model_c.
+% Estimate the shared B0034 parameter by leave-one-construct-out analysis.
 %
 % DESCRIPTION
-%   Runs leave-one-out (L1O) cross-validation across the 6 constructs in L6.
-%   For each left-out construct (defined by Construct_2_LO = [Ori, Prom, RBS]),
-%   the script performs a user-defined number of optimization runs (<num_runs>)
-%   using BADS, minimizing the library-scale mismatch between experimental
-%   synthesis-rate data and SynTwin digital-twin predictions (Pi) computed on
-%   the remaining (training) constructs.
+%   Runs six leave-one-out folds. In each fold, one Lib6 construct is excluded
+%   and the shared B0034 intrinsic initiation capacity, kappa^0, is estimated
+%   from the remaining five constructs.
 %
-%   Importantly, uncertainty from inherited Lib24 parameters is propagated by
-%   using the run index num_run to select a corresponding Monte Carlo sample of:
-%       - Omega (context-dependent promoter/transcription term), and
-%       - Gene_cn (effective gene copy number),
-%   which are kept fixed during that optimization run.
+%   Promoter rates and effective plasmid copy numbers are inherited from the
+%   Lib24 leave-one-out reduced-model tensor. Run num_run uses the matching
+%   inherited Monte Carlo samples of Omega and Gene_cn.
 %
-% MODEL SETUP (reduced model for RBSs)
-%   - Estimated: k0_sigma0 (intrinsic initiation capacity of the shared RBS)
-%   - Fixed:     inv_sigma0 (sensitivity-related parameter; fixed in the cost function)
+% FIXED VALUE
+%   rho^0 = 0.02.
 %
-% INPUTS
-%   None (configuration is set inside the script).
-%   The user must set:
-%     - Use_mean: aggregation level ('Global', 'Instances', or 'Wells')
-%     - num_runs: number of Monte Carlo / optimization runs per L1O fold
+% OUTPUTS
+%   Estimated_results/
+%       Results_BADS_Lib6_L1O_reduced_<plasmid><promoter><RBS>_<Use_mean>.mat
 %
-% OUTPUTS (saved to disk)
-%   ./Estimated_results/Results_BADS_Lib6_L1O_reduced_<Ori><Prom><RBS>_<Use_mean>.mat
-%     One file per left-out construct (L1O fold).
-%     Each file stores a cell array of per-run results, e.g.:
-%       Results_BADS_*{num_run}.results = [k0_sigma0, Jmin]
+%   One file is generated for each left-out construct.
 %
 % DEPENDENCIES
-%   - SynTwin must be initialized before running this script:
-%       ROOT = init_SynTwin(...);
-%   - This folder must be on the MATLAB path (if running from SynTwin root):
-%       addpath(fileparts(mfilename('fullpath')));
-%   - Requires the HEM surrogate:
-%       Generate_HEM/HEM_Surrogate/HEM_Surrogate.mat
-%   - Experimental data container (L6 is extracted by indexing):
-%       Experimental_Data/ExpData_Tensor_lib30_micro.mat
-%   - Inherited Lib24 parameter samples (Omega and Gene_cn), loaded from:
-%       Results_Tensor_Lib24_L1O_reduced_*.mat
-%   - Uses: J4_LogPI_Lib6_L1O_reduced (objective function)
-%   - Requires BADS (bundled in SynTwin distribution) and optional Parallel TB.
+%   - J5w_LogPI_Lib6_L1O_reduced
+%   - Results_Tensor_Lib24_L1O_reduced_Wells.mat
+%   - BADS, HEM surrogate, and processed Lib30 experimental data
 %
 % USAGE
 %   Estimate_Lib6_L1O_reduced_model
 %
-% NOTES
-%   - L6 experimental measurements are retrieved from the Lib30 tensor-format
-%     container by selecting the appropriate indices (Ori=[1 2], Prom=[1 2 3], RBS=3).
-%   - If Parallel Toolbox is unavailable, replace parfor with for.
-%   - This script quantifies the predictive generalization of an inherited
-%     (Ori/Promoter) context while identifying a shared-RBS parameter in L6.
+% See README.md for the complete workflow.
 
 clearvars;
 close all;
@@ -80,8 +41,7 @@ addpath(SCRIPT_DIR);
 
 % --- Load data using portable absolute paths ---
 load(SynTwin_path('Generate_HEM','HEM_Surrogate','HEM_Surrogate.mat'));          % loads data of the Host Equivalent Model (HEM) 
-% Getting the data of Lib30 WE USE THIS AS BASE TO GET THE EXPERIMENTAL DATA EVEN IF WE ONLY TAKE A
-% SUB-LIBRARY OF 24 TUs HERE
+% Lib6 experimental data are selected from the Lib30-format tensor.
 load(SynTwin_path('Experimental_Data','ExpData_Tensor_lib30_micro.mat'));        % loads data of Lib30: ExpData_Tensor_lib30_micro
 
 % Getting the data of Lib24 L1O reduced model (we ONLY use the estimated parameters from this file): 
@@ -120,24 +80,43 @@ for i=1:length(indices_plasmids) %Plasmids i=1 high copy (pGreen), i=2-> low cop
   end
 end
 
+% Verify that each optimization run has matching inherited samples.
+available_samples = inf;
+for plasmid_idx = 1:numel(indices_plasmids)
+    for promoter_idx = 1:numel(indices_promoters)
+        available_samples = min(available_samples, ...
+            min(numel(ParamsData_lib24{plasmid_idx,promoter_idx}.Gene_cn_MC_samples), ...
+                numel(ParamsData_lib24{plasmid_idx,promoter_idx}.Omega_MC_samples)));
+    end
+end
+if num_runs > available_samples
+    error('Estimate_Lib6_L1O_reduced_model:TooManyRuns', ...
+        'num_runs (%d) exceeds the available inherited Lib24 samples (%d).', ...
+        num_runs, available_samples);
+end
+
 % params: vector of estimated parameters of the model
  % params(1) = RBS_k0_sigma0, RBS IIC of (B0034)
- x0 = 0.13; % Starting point for RBS_k0_sigma0
+% x0 = 0.13; % Starting point for RBS_k0_sigma0
  lb = 0.05;   %lower expected bounds for RBS_k0_sigma0,      B0034         
  ub = 0.5;  %upper expected bounds for RBS_k0_sigma0,  B0034
  plb = 0.08;  %Plausible lower bounds bounds for RBS_k0_sigma0, 
- pub =  0.16; %Plausible upper bounds bounds for RBS_k0_sigma0
+ pub =  0.2; %Plausible upper bounds bounds for RBS_k0_sigma0
+RBS_inv_sigma0 = 0.02;
+delta = 0.2;     
 
 for i=1:length(indices_plasmids) %Plasmids i=1 high copy (pGreen), i=2-> low copy (pSC101)
     for j=1:length(indices_promoters)
         for k=1:length(indices_rbss)
-            Construct_2_LO = [i,j,k] %Construct to leave out: CN (1 to 2), Promoter (1 to 3),  RBS (3=B0034 )  
+            Construct_2_LO = [i,j,k]; % Local Lib6 tensor indices of the left-out construct  
                             
              % Run BADS, which returns the minimum X and its value FVAL.
-            parfor num_run=1:num_runs 
-                J=@(parameters) J4_LogPI_Lib6_L1O_reduced(parameters,Construct_2_LO,model_c,Use_mean,ExpData_Tensor_lib30_micro,ParamsData_lib24, HEM,num_run);
+            Results_BADS_B0034_LOOCV_reduced = cell(num_runs,1);
+            parfor num_run = 1:num_runs 
+                 x0 = plb + (pub-plb).* rand(1,length(lb));
+                J=@(parameters) J5w_LogPI_Lib6_L1O_reduced(parameters,Construct_2_LO,model_c,Use_mean,ExpData_Tensor_lib30_micro,ParamsData_lib24, HEM,num_run,RBS_inv_sigma0,delta);
                 [params, Jmin_value] = bads(J,x0,lb,ub,plb,pub,[],options);
-                 Results_BADS_Lib6_LOOCV_approx{num_run}.results=[params, Jmin_value]; 
+                 Results_BADS_B0034_LOOCV_reduced{num_run}.results=[params, Jmin_value]; 
             end
          % --- Save results to local Estimated_results folder (portable) ---
                 results_dir = fullfile(SCRIPT_DIR,'Estimated_results');
@@ -150,7 +129,7 @@ for i=1:length(indices_plasmids) %Plasmids i=1 high copy (pGreen), i=2-> low cop
                                 num2str(indices_rbss(Construct_2_LO(3))) + "_" + ...
                                 Use_mean + ".mat";
                 file_tensor = fullfile(results_dir, file_name);
-                save(file_tensor, "Results_BADS_B0034_LOOCV_approx", "-mat");
+                save(file_tensor, "Results_BADS_B0034_LOOCV_reduced", "-mat");
         end %rbss
     end % promoters
 end %plasmid
