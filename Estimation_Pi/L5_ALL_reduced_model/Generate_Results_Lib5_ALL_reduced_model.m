@@ -1,70 +1,25 @@
 %% Generate_Results_Lib5_ALL_reduced_model
-% SynTwin workflow script: post-processing and compilation of Lib5 (ALL)
-% reduced-model results (promoter-only estimation with inherited Ori/RBS parameters).
-%
-% CONTEXT (Lib5 sublibrary)
-%   Lib5 is a 5-TU sublibrary defined by:
-%     - 1 plasmid origin: pGreen (single Ori context)
-%     - 1 promoter:       J23100 (the promoter being estimated)
-%     - 5 RBSs:           [1 2 3 4 5] (five translational contexts)
-%
-%   In this workflow:
-%     - Only the promoter transcription parameter Omega (J23100) is estimated
-%       from Lib5 data (ALL scheme).
-%     - The effective gene copy number (Gene_cn) and four RBS k0_sigma0 values
-%       are inherited from Lib24 reduced-model inference (pGreen context).
-%     - The k0_sigma0 of RBS B0034 (not present in Lib24) is inherited from the
-%       dedicated Lib6 reduced-model inference.
+% Compile the Lib5 all-construct reduced-model result tensor.
 %
 % DESCRIPTION
-%   Loads the optimization outputs produced by Estimate_Lib5_ALL_reduced_model
-%   (BADS runs estimating Omega for J23100) and compiles them into a unified
-%   Results tensor for Lib5:
-%     (i)  inherited parameter statistics (Gene_cn; RBS k0_sigma0 for all 5 RBSs),
-%     (ii) estimated promoter statistics (Omega for J23100),
-%     (iii) experimental Mu(t) and Pi(t) trajectories from Lib5,
-%     (iv) digital-twin predictions, sensitivities, and Monte Carlo summaries
-%          for downstream analysis and plotting.
+%   Combines the estimated J23100 promoter distribution with inherited pGreen
+%   copy-number and RBS parameter distributions. The script then attaches Lib5
+%   experimental data and computes sensitivities, deterministic predictions,
+%   and Monte Carlo prediction intervals.
 %
-%   Monte Carlo predictions propagate uncertainty from:
-%     - inherited parameters (Gene_cn and RBS k0_sigma0),
-%     - the estimated promoter parameter Omega (sampled from its inferred distribution).
+% INPUT
+%   Estimated_results/Results_BADS_Lib5_ALL_reduced_<Use_mean>.mat
 %
-% INPUTS
-%   None (loads results from ./Estimated_results/ and uses local configuration).
+% OUTPUT
+%   Results_Tensor_Lib5_ALL_reduced_<Use_mean>.mat
 %
-%   Configuration is set inside the script.
-%   The user must set the desired <Use_mean> option. Options are:
-%       - 'Global'    (global mean for each construct),
-%       - 'Instances' (mean of each experiment for each construct),
-%       - 'Wells'     (use data of all individual culture wells).
-%
-% OUTPUTS (saved to disk)
-%   Results_Tensor_Lib5_ALL_reduced_model_<Use_mean>.mat
-%     Example: Results_Tensor_Lib5_ALL_reduced_model_Wells.mat
-%
-% DEPENDENCIES
-%   - SynTwin initialization recommended:
-%       ROOT = init_SynTwin(...);
-%   - Requires the HEM surrogate:
-%       Generate_HEM/HEM_Surrogate/HEM_Surrogate.mat
-%   - Requires Lib5 experimental tensor:
-%       Experimental_Data/ExpData_Tensor_lib5_micro.mat
-%   - Requires inherited Lib24 reduced-model results (pGreen context):
-%       .../Results_Tensor_Lib24_L1O_reduced_Wells.mat
-%   - Requires inherited Lib6 reduced-model results (for RBS B0034):
-%       .../Results_Tensor_Lib6_L1O_reduced_Wells.mat
-%   - Requires local estimation outputs (Omega for J23100):
-%       ./Estimated_results/Results_BADS_Lib5_ALL_reduced_<Use_mean>.mat
+%   The distributed folder includes the estimation output and the compiled
+%   Wells tensor.
 %
 % USAGE
 %   Generate_Results_Lib5_ALL_reduced_model
 %
-% NOTES
-%   - Use_mean controls the aggregation level: 'Global', 'Instances', or 'Wells'.
-%   - The output file is typically loaded by Show_Results_* scripts.
-%   - This script assumes the Lib5 tensor already matches the intended indexing
-%     (single Ori/promoter context with 5 RBS entries).
+% See README.md for the complete workflow.
 
 % --- Portable project initialization (no absolute paths) ---
 ROOT = init_SynTwin('experimental',true);
@@ -103,8 +58,8 @@ Use_mean = 'Wells';
 RBS_inv_sigma0 = 0.02;
 
 % Getting the inherited estimated parameters
-Inherited_ParamsData={};
-indices_rbss_Lib24_dummy = [1,2,NaN,3,4];
+Inherited_ParamsData = struct();
+indices_rbss_Lib24 = [1,2,NaN,3,4];
 Inherited_ParamsData.Gene_cn_MC_samples = Results_Tensor_Lib6_L1O_reduced{1,1}.Gene_cn_MC_samples;
 for i=1:5
     if i==3
@@ -113,10 +68,10 @@ for i=1:5
         Inherited_ParamsData.RBS{i}.RBS_k0_sigma0_mean =  Results_Tensor_Lib6_L1O_reduced{1,1}.RBS_k0_sigma0_mean;
         Inherited_ParamsData.RBS{i}.RBS_k0_sigma0_std =   Results_Tensor_Lib6_L1O_reduced{1,1}.RBS_k0_sigma0_std;
     else
-        Inherited_ParamsData.RBS{i}.RBS_k0_sigma0_MC_samples = Results_Tensor_Lib24_L1O_reduced{1,1,indices_rbss_Lib24_dummy(i)}.RBS_k0_sigma0_MC_samples;
-        Inherited_ParamsData.RBS{i}.RBS_k0_sigma0_raw = Results_Tensor_Lib24_L1O_reduced{1,1,indices_rbss_Lib24_dummy(i)}.RBS_k0_sigma0_raw;
-        Inherited_ParamsData.RBS{i}.RBS_k0_sigma0_mean =  Results_Tensor_Lib24_L1O_reduced{1,1,indices_rbss_Lib24_dummy(i)}.RBS_k0_sigma0_mean;
-        Inherited_ParamsData.RBS{i}.RBS_k0_sigma0_std =   Results_Tensor_Lib24_L1O_reduced{1,1,indices_rbss_Lib24_dummy(i)}.RBS_k0_sigma0_std;
+        Inherited_ParamsData.RBS{i}.RBS_k0_sigma0_MC_samples = Results_Tensor_Lib24_L1O_reduced{1,1,indices_rbss_Lib24(i)}.RBS_k0_sigma0_MC_samples;
+        Inherited_ParamsData.RBS{i}.RBS_k0_sigma0_raw = Results_Tensor_Lib24_L1O_reduced{1,1,indices_rbss_Lib24(i)}.RBS_k0_sigma0_raw;
+        Inherited_ParamsData.RBS{i}.RBS_k0_sigma0_mean =  Results_Tensor_Lib24_L1O_reduced{1,1,indices_rbss_Lib24(i)}.RBS_k0_sigma0_mean;
+        Inherited_ParamsData.RBS{i}.RBS_k0_sigma0_std =   Results_Tensor_Lib24_L1O_reduced{1,1,indices_rbss_Lib24(i)}.RBS_k0_sigma0_std;
     end
 end
 
@@ -128,21 +83,43 @@ if ~exist(results_dir,'dir')
 end
 file_name = "Results_BADS_Lib5_ALL_reduced_" +   Use_mean + ".mat";
 file_tensor = fullfile(results_dir, file_name);
-load(file_tensor, "Results_BADS_J23100_ALL_approx", "-mat"); 
+S = load(file_tensor, "Results_BADS_J23100_ALL_reduced");
+if ~isfield(S,'Results_BADS_J23100_ALL_reduced')
+    error('Generate_Results_Lib5_ALL_reduced_model:MissingVariable', ...
+        'Expected variable Results_BADS_J23100_ALL_reduced in %s.', file_tensor);
+end
+Results_BADS_J23100_ALL_reduced = S.Results_BADS_J23100_ALL_reduced;
 
-num_runs = length(Results_BADS_J23100_ALL_approx);
+num_runs = length(Results_BADS_J23100_ALL_reduced);
 Matrix_tempo_All = [];
-for i=1:num_runs
-   Matrix_tempo_All=[Matrix_tempo_All;Results_BADS_J23100_ALL_approx{i}.results(1,1)];
+J_raw = [];
+for run_idx = 1:num_runs
+    run_results = Results_BADS_J23100_ALL_reduced{run_idx}.results;
+    Matrix_tempo_All = [Matrix_tempo_All; run_results(1,1)]; %#ok<AGROW>
+    J_raw = [J_raw; run_results(1,2)]; %#ok<AGROW>
 end
 Estimated_omega_J23100.ALL_raw = Matrix_tempo_All;
 Estimated_omega_J23100.ALL_mean = mean(Matrix_tempo_All,1);
 Estimated_omega_J23100.ALL_std = std(Matrix_tempo_All,0,1);
+Estimated_omega_J23100.J_raw = J_raw;
 
-A=-1;
-B=-1e-6;
-n_samples_MC = 1000;
-Estimated_omega_J23100.Omega_MC_samples = rmvnrnd(Estimated_omega_J23100.ALL_mean, Estimated_omega_J23100.ALL_std.^2, n_samples_MC,A,B);
+A = -1;
+B = -1e-6;
+requested_samples_MC = 1000;
+available_samples_MC = numel(Inherited_ParamsData.Gene_cn_MC_samples);
+for rbs_idx = 1:5
+    available_samples_MC = min(available_samples_MC, ...
+        numel(Inherited_ParamsData.RBS{rbs_idx}.RBS_k0_sigma0_MC_samples));
+end
+n_samples_MC = min(requested_samples_MC,available_samples_MC);
+if n_samples_MC < requested_samples_MC
+    warning('Generate_Results_Lib5_ALL_reduced_model:ReducedMCSamples', ...
+        'Using %d Monte Carlo samples because inherited inputs contain fewer than %d.', ...
+        n_samples_MC, requested_samples_MC);
+end
+Estimated_omega_J23100.Omega_MC_samples = rmvnrnd( ...
+    Estimated_omega_J23100.ALL_mean,Estimated_omega_J23100.ALL_std.^2, ...
+    n_samples_MC,A,B);
        
 indices_plasmids_lib5 = 1;
 num_plasmids_Lib5 = length(indices_plasmids_lib5);
@@ -151,7 +128,7 @@ num_promoters_Lib5 = length(indices_promoters_lib5);
 indices_rbss_lib5 = [1,2,3,4,5];
 num_rbss_Lib5 = length(indices_rbss_lib5);
 
-% Adds the estimated parameters, experimental and predicted synthesis and their statistics to the structure Results_Tensor_lib5_ALL_approx
+% Build the Lib5 result tensor.
 for r=1:num_rbss_Lib5
     if strcmp(Use_mean,'Wells' )   
          Results_Tensor_Lib5_ALL_reduced{1,1,r}.Use_mean = 'Wells'; 
@@ -284,7 +261,6 @@ for r=1:num_rbss_Lib5
 
     % Next, for each value of growth rate, we can get the probability density function of the predicted synthesis rate and get statistics from it
    MC_Pi_pred_mu = NaN*ones(n_samples_MC,length(Mu_vector)); %each column is a value of growth rate, each row is a MC sample
-   MC_Pi_pred_mu_approx = NaN*ones(n_samples_MC,length(Mu_vector)); 
    for j=1:n_samples_MC
        MC_Pi_pred_mu(j,:) = Results_Tensor_Lib5_ALL_reduced{1,1,r}.MC_samples(j).Synthesis_predictions.Pi_pred_values';
    end
@@ -308,6 +284,6 @@ end %rbss
 % --- Save generated results in the same folder as this script (portable) ---
 file_name  = "Results_Tensor_Lib5_ALL_reduced_" + Use_mean + ".mat";
 file_tensor = fullfile(SCRIPT_DIR, file_name);
-save(file_tensor, "Results_Tensor_Lib5_ALL_reduced", "-mat");
+save(file_tensor, "Results_Tensor_Lib5_ALL_reduced", "Estimated_omega_J23100", "-mat");
 
  

@@ -1,58 +1,27 @@
 %% Generate_Results_Lib6_ALL_reduced_model
-% SynTwin workflow script: post-processing and compilation of L6 (ALL) reduced-model results.
-%
-% CONTEXT (L6 sublibrary)
-%   L6 is a 6-TU sublibrary defined by 2 plasmid origins and 3 promoters,
-%   sharing a common RBS. In this workflow:
-%     - The shared RBS parameter (k0_sigma0) is estimated in L6 (from BADS runs).
-%     - Ori-/promoter-dependent parameters (e.g., Omega and Gene copy number)
-%       are inherited from Lib24 inference results.
-%     - Experimental measurements for the corresponding 6 TUs are retrieved
-%       by indexing a larger experimental tensor container (Lib30-format).
+% Compile the Lib6 all-construct reduced-model result tensor.
 %
 % DESCRIPTION
-%   Loads the optimization outputs produced by Estimate_L6_ALL_reduced and
-%   compiles them into a unified Results tensor for the L6 sublibrary.
-%   The generated structure aggregates:
-%     (i) inherited parameter statistics (Omega, Gene_cn) from Lib24,
-%     (ii) estimated RBS statistics (k0_sigma0) from L6 BADS runs,
-%     (iii) experimental Mu(t) and Pi(t) trajectories for the L6 TUs, and
-%     (iv) digital-twin predictions, sensitivities, and Monte Carlo summaries
-%          required for downstream analysis and plotting.
+%   Combines the B0034 estimates obtained in Lib6 with promoter and plasmid
+%   parameter distributions inherited from the Lib24 leave-one-out workflow.
+%   The script selects the six B0034 constructs from the Lib30 experimental
+%   tensor and computes sensitivities, growth-rate predictions, and Monte Carlo
+%   prediction intervals.
 %
 % INPUTS
-%   None (loads results from ./Estimated_results/ and uses local configuration).
+%   Estimated_results/Results_BADS_Lib6_ALL_reduced_<Use_mean>.mat
+%   ../L24_L1O_reduced_model/Results_Tensor_Lib24_L1O_reduced_Wells.mat
 %
-%   Configuration is set inside the script.
-%   The user must set the desired <Use_mean> option. Options are:
-%       - 'Global'    (global mean for each construct),
-%       - 'Instances' (mean of each experiment for each construct),
-%       - 'Wells'     (use data of all individual culture wells).
+% OUTPUT
+%   Results_Tensor_Lib6_ALL_reduced_<Use_mean>.mat
 %
-% OUTPUTS (saved to disk)
-%   Results_Tensor_Lib6_ALL_reduced_model_<Use_mean>.mat
-%     Example: Results_Tensor_Lib6_ALL_reduced_model_Wells.mat
-%
-% DEPENDENCIES
-%   - SynTwin initialization recommended:
-%       ROOT = init_SynTwin(...);
-%   - Requires local estimation outputs:
-%       ./Estimated_results/Results_BADS_Lib6_ALL_reduced_<Use_mean>.mat
-%   - Requires inherited Lib24 parameter tensor (Omega, Gene_cn):
-%       Results_Tensor_Lib24_*.mat
-%   - Requires the HEM surrogate:
-%       Generate_HEM/HEM_Surrogate/HEM_Surrogate.mat
-%   - Requires the experimental tensor container from which L6 is extracted
-%     by indexing (Lib30-format container).
+%   The distributed folder includes the estimation output and the compiled
+%   Wells tensor.
 %
 % USAGE
-%   Generate_Results_L6_ALL_reduced_model
+%   Generate_Results_Lib6_ALL_reduced_model
 %
-% NOTES
-%   - Use_mean controls the aggregation level: 'Global', 'Instances', or 'Wells'.
-%   - The output file is typically loaded by Show_Results_* scripts.
-%   - Monte Carlo predictions are generated to propagate uncertainty from both
-%     inherited (Lib24) and estimated (L6) parameters.
+% See README.md for the complete workflow.
 
 % --- Portable project initialization (no absolute paths) ---
 ROOT = init_SynTwin('experimental',true);
@@ -118,17 +87,22 @@ if ~exist(results_dir,'dir')
 end
 file_name = "Results_BADS_Lib6_ALL_reduced_" +   Use_mean + ".mat";
 file_tensor = fullfile(results_dir, file_name);
-load(file_tensor, "Results_BADS_B0034_ALL_approx", "-mat");
-num_runs = length(Results_BADS_B0034_ALL_approx);
-for i=1:num_runs
-   Matrix_tempo_All=[Matrix_tempo_All;Results_BADS_B0034_ALL_approx{i}.results(1,1)];
+S = load(file_tensor, "Results_BADS_B0034_ALL_reduced");
+if ~isfield(S,'Results_BADS_B0034_ALL_reduced')
+    error('Generate_Results_Lib6_ALL_reduced_model:MissingVariable', ...
+        'Expected variable Results_BADS_B0034_ALL_reduced in %s.', file_tensor);
+end
+Results_BADS_B0034_ALL_reduced = S.Results_BADS_B0034_ALL_reduced;
+num_runs = length(Results_BADS_B0034_ALL_reduced);
+for run_idx = 1:num_runs
+    Matrix_tempo_All = [Matrix_tempo_All; Results_BADS_B0034_ALL_reduced{run_idx}.results(1,1)]; %#ok<AGROW>
 end
 Estimated_parameters_B0034.ALL_raw = Matrix_tempo_All;
 Estimated_parameters_B0034.ALL_mean = mean(Matrix_tempo_All,1);
 Estimated_parameters_B0034.ALL_std = std(Matrix_tempo_All,0,1);
 
 
-% Adds the estimated parameters and their statistics to the structure Results_Tensor_lib6_L1O_approx
+% Build the Lib6 result tensor.
 for p=1:length(indices_plasmids_lib6)
     for q=1:length(indices_promoters_lib6)
         for r=1:length(indices_rbss_lib6)

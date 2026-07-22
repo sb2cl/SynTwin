@@ -64,3 +64,73 @@ title_text = 'Lib24. ALL. RM.';
 
 Plot_Results_Lib_reduced_model(Results_Tensor_Lib24_ALL_reduced,Lower_Bounds,Upper_Bounds,indices_plasmids,indices_promoters,indices_rbss, title_text)
 
+figure('Name','Estimate vs initial guess Promoters','Color','w');
+tiledlayout(1,3,'Padding','compact','TileSpacing','compact');
+for i = 1:3
+    nexttile
+    scatter(Estimated_parameters.X0_raw(:,i),Estimated_parameters.ALL_raw(:,i),35,Estimated_parameters.J_raw,'filled');
+    hold on
+    mn = min([Estimated_parameters.X0_raw(:,i); Estimated_parameters.ALL_raw(:,i)]);
+    mx = max([Estimated_parameters.X0_raw(:,i); Estimated_parameters.ALL_raw(:,i)]);
+    plot([mn mx],[mn mx],'k--');
+    xlabel('$x_0$','Interpreter','latex');
+    ylabel('$\hat{\theta}$','Interpreter','latex');
+    grid on;
+end
+
+figure('Name','Estimate vs Cost Promoter','Color','w');
+tiledlayout(1,3,'Padding','compact','TileSpacing','compact');
+for i = 1:3
+    nexttile
+    scatter(Estimated_parameters.ALL_raw(:,i),Estimated_parameters.J_raw,35,Estimated_parameters.J_raw,'filled');
+    xlabel('$\hat{\theta}$','Interpreter','latex');
+    ylabel('$J$','Interpreter','latex');
+    grid on;
+end
+
+figure('Name','Estimate vs initial guess RBSs','Color','w');
+tiledlayout(1,4,'Padding','compact','TileSpacing','compact');
+for i = 1:4
+    nexttile
+    scatter(Estimated_parameters.X0_raw(:,3+i),Estimated_parameters.ALL_raw(:,3+i),35,Estimated_parameters.J_raw,'filled');
+    hold on
+    mn = min([Estimated_parameters.X0_raw(:,3+i); Estimated_parameters.ALL_raw(:,3+i)]);
+    mx = max([Estimated_parameters.X0_raw(:,3+i); Estimated_parameters.ALL_raw(:,3+i)]);
+    plot([mn mx],[mn mx],'k--');
+    xlabel('$x_0$','Interpreter','latex');
+    ylabel('$\hat{\theta}$','Interpreter','latex');
+    grid on;
+end
+
+figure('Name','Estimate vs Cost RBSs','Color','w');
+tiledlayout(1,4,'Padding','compact','TileSpacing','compact');
+for i = 1:4
+    nexttile
+    scatter(Estimated_parameters.ALL_raw(:,3+i),Estimated_parameters.J_raw,35,Estimated_parameters.J_raw,'filled');
+    xlabel('$\hat{\theta}$','Interpreter','latex');
+    ylabel('$J$','Interpreter','latex');
+    grid on;
+end
+
+ 
+
+figure('Name','Estimate vs initial guess Ori','Color','w');
+tiledlayout(1,1,'Padding','compact','TileSpacing','compact');
+    nexttile
+    scatter(5*Estimated_parameters.X0_raw(:,8),5*Estimated_parameters.ALL_raw(:,8),35,Estimated_parameters.J_raw,'filled');
+    hold on
+    mn = min(5*[Estimated_parameters.X0_raw(:,8); Estimated_parameters.ALL_raw(:,8)]);
+    mx = max(5*[Estimated_parameters.X0_raw(:,8); Estimated_parameters.ALL_raw(:,8)]);
+    plot([mn mx],[mn mx],'k--');
+    xlabel('$x_0$','Interpreter','latex');
+    ylabel('$\hat{\theta}$','Interpreter','latex');
+    grid on;
+    
+
+    figure('Name','Estimate vs cost Ori','Color','w');
+    tiledlayout(1,1,'Padding','compact','TileSpacing','compact');
+    nexttile
+    scatter(5*Estimated_parameters.ALL_raw(:,8),Estimated_parameters.J_raw,35,Estimated_parameters.J_raw,'filled');
+    xlabel('$\hat{\theta}$','Interpreter','latex');
+    ylabel('$J$','Interpreter','latex');
+    grid on;

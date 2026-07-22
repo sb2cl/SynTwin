@@ -29,7 +29,13 @@ opt = p.Results;
 ROOT = SynTwin_root();   % Detect and cache project root
 
 % --- Always-added base folders ---
-add_if_exists(fullfile(ROOT,'Scripts_base'));
+scripts_base = fullfile(ROOT,'Scripts_base');
+
+if exist(scripts_base,'dir')
+    addpath(genpath(scripts_base),'-begin');
+else
+    error('init_SynTwin:MissingDir','Scripts_base not found at: %s', scripts_base);
+end
 add_if_exists(fullfile(ROOT,'Generate_HEM','HEM_Surrogate'));
 
 % --- Option: add entire project ---

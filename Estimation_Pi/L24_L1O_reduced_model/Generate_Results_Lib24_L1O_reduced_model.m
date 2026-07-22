@@ -1,35 +1,31 @@
 %% Generate_Results_Lib24_L1O_reduced_model
-% SynTwin workflow script: post-processing and compilation of Lib24 L1O reduced-model results.
+% Compile the Lib24 leave-one-out reduced-model result tensor.
 %
 % DESCRIPTION
-%   Loads the per-construct optimization outputs produced by
-%   Estimate_Lib24_L1O_reduced_model and compiles them into a unified Results tensor
-%   (Global / Instances / Wells), ready for plotting and downstream analysis.
+%   Loads the 24 optimization files produced by
+%   Estimate_Lib24_L1O_reduced_model.m and generates a unified tensor with:
+%
+%   - local parameter distributions for each left-out construct;
+%   - pooled parameter distributions across all leave-one-out cases;
+%   - experimental data;
+%   - synthesis-rate sensitivities;
+%   - growth-rate-dependent predictions;
+%   - Monte Carlo prediction intervals.
 %
 % INPUTS
-%   None (loads results from ./Estimated_results/ and uses local configuration).
+%   Estimated_results/
+%       Results_BADS_Lib24_L1O_reduced_<plasmid><promoter><RBS>_<Use_mean>.mat
 %
-%   Configuration is set inside the script.
-%   The user must set the desired <Use_mean> option. Options are: 
-%       - 'Global' (global mean for each construct),
-%       - 'Instances' (mean of each experiment for each construct),
-%       - 'Wells' (use data of all individual culture wells)
+% OUTPUT
+%   Results_Tensor_Lib24_L1O_reduced_<Use_mean>.mat
 %
-% OUTPUTS (saved to disk)
-%   Results_Tensor_Lib24_L1O_reduced_model_<Use_mean>.mat
-%     Example: Results_Tensor_Lib24_L1O_reduced_model_Instances.mat
-%
-% DEPENDENCIES
-%   - SynTwin initialization recommended:
-%       ROOT = init_SynTwin(...);
-%   - Requires that ./Estimated_results/ contains the expected optimization files.
+%   The distributed folder includes the estimation subfolder and the compiled
+%   result tensor used by Show_Results_Lib24_L1O_reduced_model.m.
 %
 % USAGE
 %   Generate_Results_Lib24_L1O_reduced_model
 %
-% NOTES
-%   - Use_mean controls the aggregation level: 'Global', 'Instances', or 'Wells'.
-%   - The output file is typically loaded by Show_Results_* scripts.
+% See README.md for the complete workflow.
 
 % --- Portable project initialization (no absolute paths) ---
 ROOT = init_SynTwin('experimental',true);
@@ -93,12 +89,17 @@ for p=1:length(indices_plasmids_lib24)
                             num2str(indices_rbss_lib24(r)) + "_" + ...
                             Use_mean + ".mat";
             file_tensor = fullfile(results_dir, file_name);
-            load(file_tensor, "Results_BADS_Lib24_LOOCV_approx", "-mat");
-            num_runs = length(Results_BADS_Lib24_LOOCV_approx);
+            S = load(file_tensor, "Results_BADS_Lib24_LOOCV_reduced");
+            if ~isfield(S,'Results_BADS_Lib24_LOOCV_reduced')
+                error('Generate_Results_Lib24_L1O_reduced_model:MissingVariable', ...
+                    'Expected variable Results_BADS_Lib24_LOOCV_reduced in %s.', file_tensor);
+            end
+            Results_BADS_Lib24_LOOCV_reduced = S.Results_BADS_Lib24_LOOCV_reduced;
+            num_runs = length(Results_BADS_Lib24_LOOCV_reduced);
             tempo = [];
-            for i=1:num_runs
-               tempo=[tempo;Results_BADS_Lib24_LOOCV_approx{i}.results(:,1:8)];
-               Matrix_tempo_All=[Matrix_tempo_All;Results_BADS_Lib24_LOOCV_approx{i}.results(:,1:8)];
+            for run_idx = 1:num_runs
+                tempo = [tempo; Results_BADS_Lib24_LOOCV_reduced{run_idx}.results(:,1:8)]; %#ok<AGROW>
+                Matrix_tempo_All = [Matrix_tempo_All; Results_BADS_Lib24_LOOCV_reduced{run_idx}.results]; %#ok<AGROW>
             end
             Estimated_parameters.TU{p,q,r}.raw = tempo;
             Estimated_parameters.TU{p,q,r}.mean = mean(tempo,1);
@@ -106,9 +107,11 @@ for p=1:length(indices_plasmids_lib24)
         end %rbss
     end %promoters
 end %plasmids
-Estimated_parameters.ALL_raw = Matrix_tempo_All;
-Estimated_parameters.ALL_mean = mean(Matrix_tempo_All,1);
-Estimated_parameters.ALL_std = std(Matrix_tempo_All,0,1);
+Estimated_parameters.ALL_raw = Matrix_tempo_All(:,1:8);
+Estimated_parameters.ALL_mean = mean(Estimated_parameters.ALL_raw,1);
+Estimated_parameters.ALL_std = std(Estimated_parameters.ALL_raw,0,1);
+Estimated_parameters.J_raw = Matrix_tempo_All(:,9);
+Estimated_parameters.X0_raw = Matrix_tempo_All(:,10:end);
 
 % Adds the experimental data to the structure
 % Results_Tensor_Lib24_L1O_reduced
@@ -134,7 +137,7 @@ for p=1:length(indices_plasmids_lib24)
             Results_Tensor_Lib24_L1O_reduced{p,q,r}.Parameters_local_raw = Estimated_parameters.TU{p,q,r}.raw;
             Results_Tensor_Lib24_L1O_reduced{p,q,r}.Parameters_local_mean = Estimated_parameters.TU{p,q,r}.mean;
             Results_Tensor_Lib24_L1O_reduced{p,q,r}.Parameters_local_std = Estimated_parameters.TU{p,q,r}.std;
-           %Estimated parameters obtained using the resuls of all the LOOCV iterations:
+           %Estimated parameters obtained using the results of all the LOOCV iterations:
            %Plasmids p=1 high copy (pGreen), p=2-> low copy (pSC101)
             Results_Tensor_Lib24_L1O_reduced{p,q,r}.Gene_cn_raw = model_c.N_pSC101*(p-1 + mod(p,2)*Estimated_parameters.ALL_raw(:,num_promoters_Lib24+num_rbss_Lib24+1)); 
             Results_Tensor_Lib24_L1O_reduced{p,q,r}.Gene_cn_mean = model_c.N_pSC101*(p-1 + mod(p,2)*Estimated_parameters.ALL_mean(:,num_promoters_Lib24+num_rbss_Lib24+1)); 
@@ -235,4 +238,4 @@ end %plasmids
 % --- Save generated results in the same folder as this script (portable) ---
 file_name  = "Results_Tensor_Lib24_L1O_reduced_" + Use_mean + ".mat";
 file_tensor = fullfile(SCRIPT_DIR, file_name);
-save(file_tensor, "Results_Tensor_Lib24_L1O_reduced", "-mat");
+save(file_tensor, "Results_Tensor_Lib24_L1O_reduced",  "Estimated_parameters","-mat");

@@ -1,75 +1,35 @@
 %% Estimate_Lib5_ALL_reduced_model
-% SynTwin workflow script: parameter estimation for the L5 sublibrary using ALL TUs
-% under a reduced setting (estimate promoter strength Omega; inherit RBS/Gene_cn).
-%
-% CONTEXT (L5 sublibrary)
-%   L5 is a 5-TU sublibrary defined by:
-%     - a single Ori context (pGreen; Ori index fixed to 1),
-%     - a single promoter (J23100), and
-%     - five RBS variants (RBS indices: [1 2 3 4 5]).
-%
-%   In this workflow, ONLY the promoter strength parameter Omega is estimated.
-%   All RBS-related parameters (k0_sigma0) and effective gene copy number (Gene_cn)
-%   are inherited from prior inference results:
-%     - From Lib24 (L1O reduced): RBS k0_sigma0 for the 4 RBSs that exist in Lib24.
-%     - From Lib6 (L1O reduced): RBS B0034 (RBS=3) k0_sigma0, and Gene_cn samples.
+% Estimate the J23100 promoter parameter using all five Lib5 constructs.
 %
 % DESCRIPTION
-%   Runs <num_runs> independent estimations of the promoter strength Omega using
-%   ALL TUs in the L5 sublibrary. Each run uses BADS to minimize the library-scale
-%   mismatch between experimental synthesis-rate data and SynTwin digital-twin
-%   predictions (Pi).
+%   Lib5 combines pGreen and J23100 with five RBS variants. The workflow
+%   estimates only the J23100 promoter transcription parameter, Omega.
 %
-%   To propagate uncertainty in inherited parameters, this script constructs
-%   Inherited_ParamsData by sampling a random set of Monte Carlo indices
-%   (index_MC_pars). For each run index num_run, the corresponding inherited
-%   sample is used consistently across all 5 RBS-defined TUs:
-%     - Gene_cn_MC_samples(index_MC_pars(num_run))
-%     - RBS{i}.RBS_k0_sigma0_MC_samples(index_MC_pars(num_run))
-%   while Omega is estimated by the optimizer.
+%   Effective pGreen copy number and RBS intrinsic initiation capacities are
+%   inherited from previous reduced-model workflows:
 %
-% MODEL SETUP
-%   - Estimated: Omega (promoter strength; J23100)
-%   - Inherited: RBS k0_sigma0 (per RBS; includes B0034 from Lib6)
-%   - Fixed:     inv_sigma0 (sensitivity-related parameter; fixed inside the cost function)
+%   - Lib24 leave-one-out results provide B0030, B0032, J61100, and J61101;
+%   - Lib6 leave-one-out results provide B0034 and the inherited pGreen
+%     copy-number Monte Carlo samples used during optimization.
 %
-% INPUTS
-%   None (configuration is set inside the script).
-%   The user must set:
-%     - Use_mean: aggregation level ('Global', 'Instances', or 'Wells')
-%     - num_runs: number of Monte Carlo / optimization runs (e.g., 100)
+%   Each BADS run uses one consistent inherited parameter realization across
+%   all five constructs.
 %
-% OUTPUTS (saved to disk)
-%   ./Estimated_results/Results_BADS_Lib5_ALL_reduced_<Use_mean>.mat
-%     Contains a cell array of per-run results:
-%       Results_BADS_J23100_ALL_approx{num_run}.results = [Omega, Jmin]
+% FIXED VALUE
+%   rho^0 = 0.02.
+%
+% OUTPUT
+%   Estimated_results/Results_BADS_Lib5_ALL_reduced_<Use_mean>.mat
 %
 % DEPENDENCIES
-%   - SynTwin must be initialized before running this script:
-%       ROOT = init_SynTwin(...);
-%   - This folder must be on the MATLAB path (if running from SynTwin root):
-%       addpath(fileparts(mfilename('fullpath')));
-%   - Requires the HEM surrogate:
-%       Generate_HEM/HEM_Surrogate/HEM_Surrogate.mat
-%   - Experimental data container for L5:
-%       Experimental_Data/ExpData_Tensor_lib5_micro.mat
-%   - Inherited parameter sources:
-%       * Lib24 (L1O reduced) for RBSs except B0034:
-%           L24_L1O_reduced_model/Results_Tensor_Lib24_L1O_reduced_*.mat
-%       * Lib6 (L1O reduced) for B0034 and Gene_cn:
-%           L6_L1O_reduced_model/Results_Tensor_Lib6_L1O_reduced_*.mat
-%   - Uses: J4_LogPI_Lib5_ALL_reduced (objective function)
-%   - Requires BADS (bundled in SynTwin distribution) and optional Parallel TB.
+%   - J5w_LogPI_Lib5_ALL_reduced
+%   - Lib24 and Lib6 leave-one-out reduced-model result tensors
+%   - BADS, HEM surrogate, and processed Lib5 experimental data
 %
 % USAGE
 %   Estimate_Lib5_ALL_reduced_model
 %
-% NOTES
-%   - Each BADS run uses one inherited Monte Carlo sample selected via index_MC_pars.
-%     This couples uncertainty propagation to the run index num_run.
-%   - If Parallel Toolbox is unavailable, replace parfor with for.
-%   - This script estimates Omega in a fixed Ori context (pGreen) across 5 RBS contexts,
-%     leveraging previously inferred RBS/Gene_cn uncertainty from Lib24/Lib6.
+% See README.md for the complete workflow.
 
 clearvars;
 close all;
@@ -112,33 +72,58 @@ options.Display='final';
 %Use_mean = 'Instances';  
 %Use_mean = 'Global';  
 Use_mean = 'Wells'; 
-num_runs = 100;  %length(ParamsData_Tensor_libX_micro{1,1,1}.Gene_cn_MC_samples) is 1000
+num_runs = 98;
 
-Inherited_ParamsData={};
-indices_rbss_Lib24_dummy = [1,2,NaN,3,4];
-index_MC_pars = randi([1,length(Results_Tensor_Lib6_L1O_reduced{1,1}.Gene_cn_MC_samples)],num_runs,1);
-Inherited_ParamsData.Gene_cn_MC_samples = Results_Tensor_Lib6_L1O_reduced{1,1}.Gene_cn_MC_samples(index_MC_pars,1);
-for i=1:5
-    if i==3
-        Inherited_ParamsData.RBS{i}.RBS_k0_sigma0_MC_samples = Results_Tensor_Lib6_L1O_reduced{1,1}.RBS_k0_sigma0_MC_samples(index_MC_pars,1);
+Inherited_ParamsData = struct();
+indices_rbss_Lib24 = [1,2,NaN,3,4];
+
+% Determine the common number of inherited Monte Carlo samples.
+available_samples = numel(Results_Tensor_Lib6_L1O_reduced{1,1,1}.Gene_cn_MC_samples);
+available_samples = min(available_samples, ...
+    numel(Results_Tensor_Lib6_L1O_reduced{1,1,1}.RBS_k0_sigma0_MC_samples));
+for rbs_idx = [1,2,4,5]
+    lib24_idx = indices_rbss_Lib24(rbs_idx);
+    available_samples = min(available_samples, ...
+        numel(Results_Tensor_Lib24_L1O_reduced{1,1,lib24_idx}.RBS_k0_sigma0_MC_samples));
+end
+if num_runs > available_samples
+    error('Estimate_Lib5_ALL_reduced_model:TooManyRuns', ...
+        'num_runs (%d) exceeds the common inherited sample pool (%d).', ...
+        num_runs, available_samples);
+end
+
+% Sample inherited realizations with replacement and use one realization per run.
+index_MC_pars = randi(available_samples,num_runs,1);
+Inherited_ParamsData.Gene_cn_MC_samples = ...
+    Results_Tensor_Lib6_L1O_reduced{1,1,1}.Gene_cn_MC_samples(index_MC_pars);
+for rbs_idx = 1:5
+    if rbs_idx == 3
+        source_samples = Results_Tensor_Lib6_L1O_reduced{1,1,1}.RBS_k0_sigma0_MC_samples;
     else
-         Inherited_ParamsData.RBS{i}.RBS_k0_sigma0_MC_samples = Results_Tensor_Lib24_L1O_reduced{1,1,indices_rbss_Lib24_dummy(i)}.RBS_k0_sigma0_MC_samples(index_MC_pars,:);
+        lib24_idx = indices_rbss_Lib24(rbs_idx);
+        source_samples = Results_Tensor_Lib24_L1O_reduced{1,1,lib24_idx}.RBS_k0_sigma0_MC_samples;
     end
+    Inherited_ParamsData.RBS{rbs_idx}.RBS_k0_sigma0_MC_samples = ...
+        source_samples(index_MC_pars);
 end
 
 % params: vector of estimated parameters of the model
  % params(1) = Omega, Promoter strength of (J23100)
- x0 = 0.15; % Starting point f
+ %x0 = 0.15; % Starting point f
  lb = 0.02;   %lower expected bounds   Promoter Omega,     J23100          
  ub = 1.5;  %upper expected bounds  Promoter Omega,     J23100    
  plb = 0.10;  %Plausible lower bounds 
  pub =  0.25; %Plausible upper bounds 
 
  % Run BADS, which returns the minimum X and its value FVAL.
-parfor num_run=1:num_runs 
-    J=@(parameters) J4_LogPI_Lib5_ALL_reduced(parameters,model_c,Use_mean,ExpData_Tensor_lib5_micro,Inherited_ParamsData, HEM,num_run);
+ RBS_inv_sigma0 = 0.02;
+delta = 0.2;     
+Results_BADS_J23100_ALL_reduced = cell(num_runs,1);
+parfor num_run = 1:num_runs 
+    x0 = plb + (pub-plb).* rand(1,length(lb));
+    J=@(parameters) J5w_LogPI_Lib5_ALL_reduced(parameters,model_c,Use_mean,ExpData_Tensor_lib5_micro,Inherited_ParamsData, HEM,num_run,RBS_inv_sigma0,delta);
     [params, Jmin_value] = bads(J,x0,lb,ub,plb,pub,[],options);
-     Results_BADS_J23100_ALL_approx{num_run}.results=[params, Jmin_value] 
+     Results_BADS_J23100_ALL_reduced{num_run}.results = [params, Jmin_value];
 end
 
 % --- Save results to local Estimated_results folder (portable) ---
@@ -148,7 +133,7 @@ if ~exist(results_dir,'dir')
 end
 file_name = "Results_BADS_Lib5_ALL_reduced_"  + Use_mean + ".mat";
 file_tensor = fullfile(results_dir, file_name);
-save(file_tensor, "Results_BADS_J23100_ALL_approx", "-mat");
+save(file_tensor, "Results_BADS_J23100_ALL_reduced", "-mat");
 
 
 

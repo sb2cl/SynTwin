@@ -28,7 +28,7 @@
 %       ROOT = init_SynTwin(...);
 %   - This folder must be on the MATLAB path (if running from SynTwin root):
 %       addpath(fileparts(mfilename('fullpath')));
-%   - Uses: J4_LogPI_Lib24_ALL_reduced (objective function)
+%   - Uses: J5w_LogPI_Lib24_ALL_reduced (objective function)
 %   - This distribution requires BADS (bundled in SynTwin distribution) and optional Parallel TB.
 %
 % USAGE
@@ -73,7 +73,7 @@ options.Display='final';
 %Use_mean = 'Instances';  
 %Use_mean = 'Global';  
 Use_mean = 'Wells'; 
-num_runs = 50;
+num_runs = 54;
 
 indices_plasmids_lib24 = [1,2];
 indices_promoters_lib24 = [1,2,3];
@@ -84,9 +84,9 @@ indices_rbss_lib24 = [1,2,4,5];
     % params(4:7) = RBS_k0_sigma0, RBS IIC of (B0030, B0032, J61100, J61101)
     % params(8) = high copy number multiplying term. So that Cn_high = x(9)*Cn_low, and we know that Cn_low=5
     
-    x0 = [0.05,0.19, 0.16... % Starting point for omega (Use LOOCV MEIGO results for full model estimation)
-          0.8, 0.005,  0.004, 0.008 ...   % Starting point for RBS_k0_sigma0
-          4.4 ];                 % Starting point for high copy number multiplying term
+    % x0 = [0.05,0.19, 0.16... % Starting point for omega (Use LOOCV MEIGO results for full model estimation)
+    %       0.8, 0.005,  0.004, 0.008 ...   % Starting point for RBS_k0_sigma0
+    %       4.4 ];                 % Starting point for high copy number multiplying term
     lb = [0.025,0.05,0.05... %lower expected bounds for omega, promoter strengths,
           0.05, 2.5e-3,  2.5e-3,2.5e-3 ...  %lower expected bounds for RBS_k0_sigma0, 
           2.5 ];  %lower expected bound for high copy number multiplying term 
@@ -104,11 +104,13 @@ indices_rbss_lib24 = [1,2,4,5];
           5.5 ];  %Plausible upper bounds for high copy number multiplying term 
 
     % Run BADS, which returns the minimum X and its value FVAL.
-              
+    RBS_inv_sigma0 = 0.02;
+    delta = 0.2;       
     parfor num_run=1:num_runs 
-        J=@(parameters) J4_LogPI_Lib24_ALL_reduced(parameters,model_c,Use_mean,ExpData_Tensor_lib30_micro,HEM);
+         x0 = plb + (pub-plb).* rand(1,length(lb));
+        J=@(parameters) J5w_LogPI_Lib24_ALL_reduced(parameters,model_c,Use_mean,ExpData_Tensor_lib30_micro,HEM,RBS_inv_sigma0,delta);
         [params, Jmin_value] = bads(J,x0,lb,ub,plb,pub,[],options)
-         Results_BADS_Lib24_ALL_approx{num_run}.results=[params, Jmin_value]; 
+         Results_BADS_Lib24_ALL_reduced{num_run}.results=[params, Jmin_value,x0]; 
     end
 % --- Save results to local Estimated_results folder (portable) ---
 results_dir = fullfile(SCRIPT_DIR,'Estimated_results');
@@ -117,7 +119,7 @@ if ~exist(results_dir,'dir')
 end
 file_name = "Results_BADS_Lib24_ALL_reduced_"  + Use_mean + ".mat";
 file_tensor = fullfile(results_dir, file_name);
-save(file_tensor, "Results_BADS_Lib24_ALL_approx", "-mat");
+save(file_tensor, "Results_BADS_Lib24_ALL_reduced", "-mat");
 
 
 
